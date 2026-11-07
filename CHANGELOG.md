@@ -9,6 +9,24 @@ new ids, and removing a rule is a breaking change.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-07
+
+Three claims the tool made that it had not earned. All were found by an external
+review of the README and the report text, not by a bug report.
+
+### Fixed
+
+- **`AGT201` no longer asserts what the client does.** The hint said "the client
+  keeps one and the other is unreachable". No client was ever tested; the
+  behaviour differs between clients and some namespace the tools instead. The
+  message now says the call can reach either one and that clients resolve it
+  differently, which is true without a test.
+- **README no longer claims "No network calls, ever."** agentcheckup makes none
+  of its own, but `audit` starts every server in your config, and those processes
+  can do whatever they were written to do. The claim now names that boundary and
+  points at `--no-spawn`.
+- **README said 27 config locations; there are 26.** Both languages.
+
 ## [0.4.1] - 2026-11-07
 
 Both fixes came out of an external fact-check of the project, not from a bug

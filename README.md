@@ -86,7 +86,7 @@ no network calls. It reads JSON, starts processes, prints text.
 agentcheckup
 ```
 
-Finds your configs automatically — 27 known locations across Claude Desktop,
+Finds your configs automatically — 26 known locations across Claude Desktop,
 Claude Code (including its per-project `mcpServers`), Cursor, VS Code, Cline,
 Roo Code, Kilo Code, Windsurf, Zed, Codex CLI and Continue, plus project-local
 `.mcp.json` / `.cursor/mcp.json` / `.vscode/mcp.json` — starts each server,
@@ -121,7 +121,7 @@ The fastest way to keep a manifest from regressing, and the version you pin is
 the version you run — the action installs from its own checkout.
 
 ```yaml
-- uses: wanjiaqing/agentcheckup@v0.4.1
+- uses: wanjiaqing/agentcheckup@v0.4.2
   with:
     config: .mcp.json
     fail-on: warning
@@ -210,8 +210,9 @@ rule. A report nobody can read is a report nobody acts on.
   to ignore the output.
 - **Degrade, don't die.** A server that will not start is one finding, not an
   aborted run.
-- **No network calls, ever.** Your config never leaves the machine. This is the
-  one thing a commercial scanner structurally cannot promise.
+- **No network calls of its own.** No telemetry, no API, no upload; your config
+  never leaves the machine. It does *start* the servers you configured, and those
+  can do whatever they were written to do — `--no-spawn` skips that entirely.
 - **Heuristics are labelled as heuristics.** `info` means "a human should
   decide". The score is a conversation starter, not a certification.
 

@@ -187,7 +187,8 @@ def detect_conflicts(
         name_a = a.tool.name.lower()
         name_b = b.tool.name.lower()
 
-        # Hard collision: identical names, different servers. One is unreachable.
+        # Hard collision: identical names, different servers. What the client
+        # does about it varies, so the message must not promise a specific outcome.
         if name_a == name_b:
             conflicts.append(
                 Conflict(
@@ -201,8 +202,9 @@ def detect_conflicts(
                         f"'{a.server}' and '{b.server}'."
                     ),
                     hint=(
-                        "Hard collision: the client keeps one and the other is "
-                        "unreachable. Rename one, or use a gateway that prefixes."
+                        "Two servers expose the same name and clients resolve that "
+                        "differently, so the same call can reach either one. Rename "
+                        "one, or use a gateway that prefixes."
                     ),
                 )
             )
