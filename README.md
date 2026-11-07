@@ -223,6 +223,10 @@ rule. A report nobody can read is a report nobody acts on.
 - Not an MCP protocol validator. It checks quality and safety, not conformance —
   the official `modelcontextprotocol/conformance` suite does that.
 
+## Further reading
+
+- [多个 MCP Server 一起使用时，如何检测工具冲突？](https://juejin.cn/post/7704995965740580904) — the design story, in Chinese: why the scope changed from a single-server linter to cross-server conflicts, and how the scoring was rebuilt after it graded the official servers 0/100.
+
 ## Contributing
 
 Adding a rule takes about ten minutes and one small file — see

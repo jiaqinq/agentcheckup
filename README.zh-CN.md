@@ -165,6 +165,10 @@ agentcheckup rules                              # 列出全部规则
 - 不是运行时防护。它不在 agent 会话里运行。
 - 不是 MCP 协议校验器。协议一致性由官方 `modelcontextprotocol/conformance` 负责。
 
+## 相关文章
+
+- [多个 MCP Server 一起使用时，如何检测工具冲突？](https://juejin.cn/post/7704995965740580904) —— 设计复盘：为什么从单 server linter 改成跨 server 冲突检测，以及评分把官方 server 打成 0 分之后怎么重做。
+
 ## 贡献
 
 加一条规则大约十分钟、一个文件，见 [CONTRIBUTING.md](CONTRIBUTING.md)。
