@@ -1,0 +1,72 @@
+name: Rule request
+description: Propose a new lint rule, or argue that an existing one is wrong.
+title: "[rule] "
+labels: ["rule"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Rules are the point of this project. A good proposal is mostly *evidence*:
+        what goes wrong in the real world, and why a linter is the right place to
+        catch it.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of request is this?
+      options:
+        - New rule
+        - Existing rule has false positives
+        - Existing rule should be a different severity
+        - Existing rule misses a case
+    validations:
+      required: true
+
+  - type: input
+    id: rule-id
+    attributes:
+      label: Rule id (leave empty for a new rule)
+      placeholder: AGT015
+    validations:
+      required: false
+
+  - type: textarea
+    id: failure
+    attributes:
+      label: What goes wrong without this rule
+      description: >
+        Describe the concrete failure — a wrong tool call, a leaked credential, a
+        confusing retry loop. "It's bad practice" is not enough.
+    validations:
+      required: true
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Example input that should (or should not) be flagged
+      render: json
+      placeholder: |
+        {"name": "read_file", "description": "TODO: describe this tool"}
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Proposed severity
+      options:
+        - error — breaks a run or endangers the host
+        - warning — likely to cause wrong behaviour
+        - info — a human should decide
+    validations:
+      required: true
+
+  - type: textarea
+    id: false-positives
+    attributes:
+      label: What legitimate input might this wrongly flag?
+      description: >
+        This is the question that decides acceptance. If you cannot think of any,
+        you probably have not looked hard enough.
+    validations:
+      required: true

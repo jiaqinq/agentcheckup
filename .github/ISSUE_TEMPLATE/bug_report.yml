@@ -1,0 +1,63 @@
+name: Bug report
+description: Something is wrong — a crash, a wrong finding, a missed finding.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The two most useful things you can include are the
+        **rule id** and a **minimal manifest** that reproduces it.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did agentcheckup do, and what did you expect instead?
+    validations:
+      required: true
+
+  - type: input
+    id: rule
+    attributes:
+      label: Rule id (if the report is about a specific rule)
+      placeholder: AGT040
+    validations:
+      required: false
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: >
+        The smallest manifest or config that triggers it. Redact anything
+        sensitive — a single tool entry is usually enough.
+      render: json
+      placeholder: |
+        {"tools": [{"name": "x", "description": "..."}]}
+    validations:
+      required: true
+
+  - type: input
+    id: command
+    attributes:
+      label: Command you ran
+      placeholder: agentcheckup scan tools.json --fail-on warning
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Actual output
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: agentcheckup version and Python version
+      placeholder: agentcheckup 0.1.0, Python 3.12.7, Windows 11
+    validations:
+      required: true

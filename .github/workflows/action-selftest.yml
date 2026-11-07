@@ -1,0 +1,59 @@
+name: Action self-test
+
+# Exercises action.yml on a real runner, including spawning two MCP servers that
+# collide. Without this the action is only ever tested by reading it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  self-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./
+        id: doctor
+        with:
+          config: tests/fixtures/ci_config.json
+          fail-on: never
+          sarif-file: agentcheckup.sarif
+
+      - name: Assert the action produced a usable result
+        run: |
+          set -eu
+          echo "score=${{ steps.doctor.outputs.score }}"
+          echo "grade=${{ steps.doctor.outputs.grade }}"
+          echo "findings=${{ steps.doctor.outputs.findings }}"
+
+          test -n "${{ steps.doctor.outputs.score }}" || { echo "::error::score output is empty"; exit 1; }
+          test -n "${{ steps.doctor.outputs.grade }}" || { echo "::error::grade output is empty"; exit 1; }
+          test -f agentcheckup.sarif || { echo "::error::sarif file was not written"; exit 1; }
+
+          # The fixture deliberately exposes read_file from two servers.
+          grep -q "AGT201" agentcheckup.sarif || {
+            echo "::error::expected a hard-collision finding in the SARIF output"
+            cat agentcheckup.sarif
+            exit 1
+          }
+
+      - name: Assert the gate fails when it should
+        run: |
+          set +e
+          # Re-run through the CLI directly so the action's own exit-code plumbing
+          # is not what we are measuring here.
+          PYTHONPATH=src python -m agentcheckup audit \
+            --no-discover \
+            --config tests/fixtures/ci_config.json \
+            --fail-on error
+          code=$?
+          if [ "$code" -ne 1 ]; then
+            echo "::error::expected exit 1 for an error-level finding, got $code"
+            exit 1
+          fi

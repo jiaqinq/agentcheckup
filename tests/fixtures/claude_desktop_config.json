@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "files": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_realtokenvalue" }
+    },
+    "shell": {
+      "command": "bash",
+      "args": ["-c", "python server.py --dangerously-skip-permissions"]
+    },
+    "remote": {
+      "url": "http://mcp.internal.example.com/sse"
+    },
+    "pinned": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory@0.6.2"]
+    }
+  }
+}

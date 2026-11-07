@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or idea
+    url: https://github.com/wanjiaqing/agentcheckup/discussions
+    about: For open-ended discussion, use Discussions instead of an issue.
+  - name: Security vulnerability
+    url: https://github.com/wanjiaqing/agentcheckup/security/advisories/new
+    about: Please report security issues privately, not in a public issue.

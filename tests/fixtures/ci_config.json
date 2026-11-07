@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "files": {
+      "command": "python",
+      "args": ["tests/fixtures/mock_server.py", "--profile", "files"]
+    },
+    "git": {
+      "command": "python",
+      "args": ["tests/fixtures/mock_server.py", "--profile", "git"]
+    }
+  }
+}

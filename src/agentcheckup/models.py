@@ -1,0 +1,166 @@
+"""Core data model for agentcheckup.
+
+Everything here is deliberately dependency-free so the package keeps working
+across MCP spec revisions without chasing an SDK release.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
+
+
+class Severity(str, Enum):
+    ERROR = "error"
+    WARNING = "warning"
+    INFO = "info"
+
+    @property
+    def rank(self) -> int:
+        return {"error": 3, "warning": 2, "info": 1}[self.value]
+
+
+@dataclass(frozen=True)
+class Finding:
+    """A single lint result.
+
+    ``rule`` is a stable id (AGT0xx) so CI configs and suppressions never break
+    when wording changes.
+    """
+
+    rule: str
+    severity: Severity
+    message: str
+    tool: str | None = None
+    hint: str | None = None
+    where: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        out: dict[str, Any] = {
+            "rule": self.rule,
+            "severity": self.severity.value,
+            "message": self.message,
+        }
+        if self.tool:
+            out["tool"] = self.tool
+        if self.hint:
+            out["hint"] = self.hint
+        if self.where:
+            out["where"] = self.where
+        return out
+
+
+@dataclass
+class Tool:
+    """One entry from ``tools/list``."""
+
+    name: str
+    description: str = ""
+    input_schema: dict[str, Any] = field(default_factory=dict)
+    annotations: dict[str, Any] = field(default_factory=dict)
+    raw: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_raw(cls, data: dict[str, Any]) -> Tool:
+        schema = data.get("inputSchema") or data.get("input_schema") or {}
+        if not isinstance(schema, dict):
+            schema = {}
+        annotations = data.get("annotations") or {}
+        if not isinstance(annotations, dict):
+            annotations = {}
+        description = data.get("description") or ""
+        if not isinstance(description, str):
+            description = str(description)
+        return cls(
+            name=str(data.get("name", "")),
+            description=description,
+            input_schema=schema,
+            annotations=annotations,
+            raw=data,
+        )
+
+    def properties(self) -> dict[str, Any]:
+        props = self.input_schema.get("properties")
+        return props if isinstance(props, dict) else {}
+
+    def required(self) -> list[str]:
+        req = self.input_schema.get("required")
+        if not isinstance(req, list):
+            return []
+        return [str(x) for x in req]
+
+
+@dataclass
+class ServerConfig:
+    """A server entry lifted from an MCP client config file."""
+
+    name: str
+    command: str | None = None
+    args: list[str] = field(default_factory=list)
+    env: dict[str, str] = field(default_factory=dict)
+    url: str | None = None
+    source: str | None = None
+
+    @classmethod
+    def from_raw(cls, name: str, data: dict[str, Any], source: str | None = None) -> ServerConfig:
+        args = data.get("args") or []
+        if not isinstance(args, list):
+            args = [str(args)]
+        env = data.get("env") or {}
+        if not isinstance(env, dict):
+            env = {}
+        return cls(
+            name=name,
+            command=data.get("command"),
+            args=[str(a) for a in args],
+            env={str(k): str(v) for k, v in env.items()},
+            url=data.get("url") or data.get("serverUrl"),
+            source=source,
+        )
+
+
+def grade_for(score: int) -> str:
+    if score >= 90:
+        return "A"
+    if score >= 80:
+        return "B"
+    if score >= 70:
+        return "C"
+    if score >= 60:
+        return "D"
+    return "F"
+
+
+#: Points charged against a manifest's budget.
+#:
+#: ``info`` is capped rather than free: a rule that fires on 18 of 18 tools in
+#: the official MCP servers is expressing a preference, but a report full of
+#: nudges should not still earn an A either.
+SEVERITY_WEIGHT = {Severity.ERROR: 10, Severity.WARNING: 3, Severity.INFO: 1}
+
+#: Info findings can cost at most this many points in total.
+INFO_CAP = 10
+
+#: Points of budget granted per tool.
+BUDGET_PER_TOOL = 20
+
+
+def score_findings(findings: list[Finding], tool_count: int = 1) -> int:
+    """Score 0-100, normalised per tool so a big manifest is not punished for size.
+
+    Calibrated against four real cases rather than invented: the three official
+    MCP servers (18 tools, 12 warnings, 77 nudges) land at 87; a manifest with a
+    hard collision, an unpinned package and a plaintext token lands at 79; the
+    deliberately broken fixture lands at 35; a clean manifest at 100.
+
+    A flat subtraction scored the official servers 0/100, which tells the reader
+    nothing and makes the tool look broken.
+    """
+    penalty = sum(SEVERITY_WEIGHT[f.severity] for f in findings)
+    infos = sum(1 for f in findings if f.severity is Severity.INFO)
+    if infos:
+        # Replace the per-finding info charge with the capped one.
+        penalty += min(infos, INFO_CAP) - infos
+    budget = BUDGET_PER_TOOL * max(tool_count, 1)
+    return round(100 * max(0.0, 1 - penalty / budget))

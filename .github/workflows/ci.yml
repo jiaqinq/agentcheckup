@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install dev tools
+        run: python -m pip install --upgrade pip pytest ruff
+      - name: Lint
+        run: ruff check .
+      - name: Test
+        run: pytest -q
+
+  self-lint:
+    # Dogfood: agentcheckup lints its own fixtures. If this job fails, the fixtures
+    # or a rule regressed.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required by upload-sarif. Without it the upload fails with
+      # "Resource not accessible by integration", which is how this job first
+      # broke in CI.
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Lint the clean fixture (must pass)
+        run: PYTHONPATH=src python -m agentcheckup scan tests/fixtures/good_tools.json --min-score 90
+      - name: Lint the dirty fixture (must fail)
+        run: |
+          set +e
+          PYTHONPATH=src python -m agentcheckup scan tests/fixtures/bad_tools.json --fail-on error
+          code=$?
+          if [ "$code" -ne 1 ]; then
+            echo "expected exit 1, got $code"
+            exit 1
+          fi
+      - name: Emit SARIF
+        if: always()
+        run: PYTHONPATH=src python -m agentcheckup scan tests/fixtures/bad_tools.json --format sarif --fail-on never > agentcheckup.sarif
+      - name: Upload SARIF
+        if: always()
+        # v3 is deprecated in December 2026.
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: agentcheckup.sarif

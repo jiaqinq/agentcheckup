@@ -1,0 +1,121 @@
+name: agentcheckup
+description: Diagnose your agent setup - cross-server tool conflicts, risky MCP config, context budget.
+author: wanjiaqing
+
+branding:
+  icon: activity
+  color: purple
+
+inputs:
+  config:
+    description: >
+      Config file(s) to audit, comma or newline separated. Leave empty to
+      auto-discover known client configs (Claude Desktop, Claude Code, Cursor,
+      VS Code, Cline, Roo Code, Kilo Code, Windsurf, Zed, Codex CLI).
+    required: false
+    default: ""
+  fail-on:
+    description: Minimum severity that fails the job - error, warning, info, or never.
+    required: false
+    default: "error"
+  min-score:
+    description: Also fail when the score is below this number. Empty disables it.
+    required: false
+    default: ""
+  sarif-file:
+    description: Write a SARIF report to this path, for upload-sarif. Empty disables it.
+    required: false
+    default: ""
+  args:
+    description: Extra arguments appended verbatim, e.g. "--no-spawn --timeout 40".
+    required: false
+    default: ""
+
+outputs:
+  score:
+    description: Numeric score, 0-100.
+    value: ${{ steps.run.outputs.score }}
+  grade:
+    description: Letter grade, A-F.
+    value: ${{ steps.run.outputs.grade }}
+  findings:
+    description: Total number of findings.
+    value: ${{ steps.run.outputs.findings }}
+  exit-code:
+    description: agentcheckup's exit code (0 clean, 1 findings, 2 usage error).
+    value: ${{ steps.run.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install agentcheckup
+      shell: bash
+      # Installs from this action's own checkout, so the action version pins the
+      # tool version and a PyPI release is not required to use it.
+      run: python -m pip install --quiet --disable-pip-version-check "$GITHUB_ACTION_PATH"
+
+    - name: Diagnose
+      id: run
+      shell: bash
+      env:
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_MIN_SCORE: ${{ inputs.min-score }}
+        INPUT_SARIF_FILE: ${{ inputs.sarif-file }}
+        INPUT_ARGS: ${{ inputs.args }}
+      run: |
+        set -uo pipefail
+
+        json="$RUNNER_TEMP/agentcheckup.json"
+        cmd=(agentcheckup audit --format text --json-out "$json")
+        cmd+=(--fail-on "${INPUT_FAIL_ON:-error}")
+
+        if [ -n "${INPUT_MIN_SCORE:-}" ]; then
+          cmd+=(--min-score "$INPUT_MIN_SCORE")
+        fi
+        if [ -n "${INPUT_SARIF_FILE:-}" ]; then
+          cmd+=(--sarif-out "$INPUT_SARIF_FILE")
+        fi
+
+        if [ -n "${INPUT_CONFIG:-}" ]; then
+          # Accept commas or newlines, trim whitespace, ignore blanks.
+          while IFS= read -r entry; do
+            entry="${entry#"${entry%%[![:space:]]*}"}"
+            entry="${entry%"${entry##*[![:space:]]}"}"
+            [ -z "$entry" ] && continue
+            cmd+=(--config "$entry")
+          done < <(printf '%s\n' "$INPUT_CONFIG" | tr ',' '\n')
+        fi
+
+        if [ -n "${INPUT_ARGS:-}" ]; then
+          # Intentional word splitting: args is a free-form string.
+          # shellcheck disable=SC2206
+          cmd+=($INPUT_ARGS)
+        fi
+
+        echo "::group::agentcheckup"
+        set +e
+        "${cmd[@]}"
+        code=$?
+        set -e
+        echo "::endgroup::"
+
+        # Publish machine-readable results even when the run failed, so a
+        # workflow can gate on score without parsing the log.
+        if [ -f "$json" ]; then
+          read -r score grade findings < <(
+            python -c "import json,sys;d=json.load(open(sys.argv[1],encoding='utf-8'));print(d['score'],d['grade'],len(d['findings']))" "$json"
+          )
+          {
+            echo "score=$score"
+            echo "grade=$grade"
+            echo "findings=$findings"
+            echo "exit-code=$code"
+          } >> "$GITHUB_OUTPUT"
+          echo "agentcheckup: grade $grade, score $score/100, $findings finding(s)"
+        fi
+
+        if [ "$code" -eq 2 ]; then
+          echo "::error::agentcheckup could not read any MCP config. Pass one with the 'config' input."
+        fi
+        exit "$code"

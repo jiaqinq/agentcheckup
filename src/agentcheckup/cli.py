@@ -1,0 +1,242 @@
+"""Command line entry point."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from .discovery import discover, load_servers
+from .engine import Report, lint_audit, lint_servers, lint_tools
+from .loader import LoadError, StdioSession, load_from_file, servers_from_config
+from .models import ServerConfig, Severity
+from .report import __version__, render_json, render_rule_list, render_sarif, render_text
+
+EXIT_OK = 0
+EXIT_FINDINGS = 1
+EXIT_USAGE = 2
+
+THRESHOLDS = {
+    "error": Severity.ERROR,
+    "warning": Severity.WARNING,
+    "info": Severity.INFO,
+}
+
+
+def _add_output_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--format", choices=("text", "json", "sarif"), default="text")
+    parser.add_argument(
+        "--fail-on",
+        choices=("error", "warning", "info", "never"),
+        default="error",
+        help="Exit non-zero at or above this severity (default: error).",
+    )
+    parser.add_argument("--min-score", type=int, default=None, help="Also fail below this score.")
+    parser.add_argument("--verbose", action="store_true", help="Show extra detail per finding.")
+    parser.add_argument(
+        "--json-out",
+        metavar="PATH",
+        default=None,
+        help="Also write the JSON report here, whatever --format says.",
+    )
+    parser.add_argument(
+        "--sarif-out",
+        metavar="PATH",
+        default=None,
+        help="Also write a SARIF report here. One run, three outputs.",
+    )
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="agentcheckup",
+        description="Diagnose your agent setup: tool conflicts, risky config, context budget.",
+    )
+    parser.add_argument("--version", action="version", version=f"agentcheckup {__version__}")
+    sub = parser.add_subparsers(dest="command")
+
+    audit = sub.add_parser(
+        "audit",
+        help="Audit every MCP client config found on this machine (default command).",
+    )
+    audit.add_argument(
+        "--config",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="Extra config file to include (repeatable).",
+    )
+    audit.add_argument(
+        "--timeout",
+        type=float,
+        default=25.0,
+        help="Seconds to wait for each server's tools/list (default: 25).",
+    )
+    audit.add_argument(
+        "--no-spawn",
+        action="store_true",
+        help="Do not start servers; check configs only. Fast, but no conflict detection.",
+    )
+    audit.add_argument(
+        "--no-discover",
+        action="store_true",
+        help="Do not auto-find configs; audit only the ones passed with --config.",
+    )
+    _add_output_flags(audit)
+
+    scan = sub.add_parser("scan", help="Lint one tools/list manifest (file or live server).")
+    scan.add_argument("path", nargs="?", help="JSON file containing a tools array.")
+    scan.add_argument("--cmd", dest="cmd", help="Spawn this stdio server and lint its live tools/list.")
+    _add_output_flags(scan)
+
+    cfg = sub.add_parser("config", help="Audit a single client config file.")
+    cfg.add_argument("path", help="e.g. claude_desktop_config.json or .vscode/mcp.json")
+    _add_output_flags(cfg)
+
+    sub.add_parser("rules", help="List every rule with its id and severity.")
+    return parser
+
+
+def _emit(report: Report, args: argparse.Namespace) -> None:
+    # Side outputs first: CI reads them even when the human view is what printed.
+    if args.json_out:
+        Path(args.json_out).write_text(render_json(report), encoding="utf-8")
+    if args.sarif_out:
+        Path(args.sarif_out).write_text(render_sarif(report), encoding="utf-8")
+
+    if args.format == "json":
+        print(render_json(report))
+    elif args.format == "sarif":
+        print(render_sarif(report))
+    else:
+        print(render_text(report, verbose=args.verbose))
+
+
+def _exit_code(report: Report, fail_on: str, min_score: int | None) -> int:
+    if min_score is not None and report.score < min_score:
+        return EXIT_FINDINGS
+    if fail_on == "never":
+        return EXIT_OK
+    return EXIT_FINDINGS if report.exceeding(THRESHOLDS[fail_on]) else EXIT_OK
+
+
+def _dedupe(servers: list[ServerConfig]) -> list[ServerConfig]:
+    """The same server is often declared in several configs.
+
+    Spawning it twice would double its tools and invent conflicts that do not
+    exist, so identity is the launch spec, not the name.
+    """
+    seen: set[tuple] = set()
+    out: list[ServerConfig] = []
+    for server in servers:
+        key = (
+            (server.command or "").lower(),
+            tuple(a.lower() for a in server.args),
+            (server.url or "").lower(),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(server)
+    return out
+
+
+def _run_audit(args: argparse.Namespace) -> int:
+    configs = [] if args.no_discover else discover()
+    for extra in args.config:
+        path = Path(extra)
+        if not path.is_file():
+            print(f"agentcheckup: no such config file: {path}", file=sys.stderr)
+            return EXIT_USAGE
+        configs.append(("explicit", path))
+
+    if not configs:
+        print(
+            "agentcheckup: no MCP client config found.\n"
+            "Looked for Claude Desktop, Claude Code, Cursor, Windsurf, Cline and\n"
+            "project-local .mcp.json / .cursor/mcp.json / .vscode/mcp.json.\n"
+            "Point it at one explicitly: agentcheckup audit --config path/to/config.json",
+            file=sys.stderr,
+        )
+        return EXIT_USAGE
+
+    servers: list[ServerConfig] = []
+    for label, path in configs:
+        servers.extend(load_servers(path, label))
+    servers = _dedupe(servers)
+
+    if not servers:
+        print("agentcheckup: configs found, but none declare an MCP server.", file=sys.stderr)
+        return EXIT_USAGE
+
+    tools_by_server: dict[str, list] = {}
+    failures: dict[str, str] = {}
+
+    if args.no_spawn:
+        # Config-only mode: no tools, so no tool or conflict findings.
+        for server in servers:
+            failures[server.name] = "not started (--no-spawn)"
+    else:
+        for server in servers:
+            if not server.command:
+                failures[server.name] = "remote server (url); cannot be introspected over stdio"
+                continue
+            argv = [server.command, *server.args]
+            try:
+                with StdioSession(argv, timeout=args.timeout, env=server.env) as session:
+                    tools_by_server[server.name] = session.list_tools()
+            except LoadError as exc:
+                failures[server.name] = str(exc).splitlines()[0][:200]
+
+    report = lint_audit(
+        servers,
+        tools_by_server,
+        failures={} if args.no_spawn else failures,
+        source=f"{len(configs)} config(s)",
+    )
+    _emit(report, args)
+    return _exit_code(report, args.fail_on, args.min_score)
+
+
+def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+
+    # `agentcheckup` with no arguments is the whole point: one command, full audit.
+    if not argv or (argv[0].startswith("-") and argv[0] not in ("-h", "--help", "--version")):
+        argv = ["audit", *argv]
+
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    if args.command == "rules":
+        print(render_rule_list())
+        return EXIT_OK
+
+    if args.command == "audit":
+        return _run_audit(args)
+
+    try:
+        if args.command == "scan":
+            if bool(args.path) == bool(args.cmd):
+                parser.error("scan needs exactly one of: a JSON path, or --cmd")
+            if args.cmd:
+                with StdioSession(args.cmd) as session:
+                    tools = session.list_tools()
+                report = lint_tools(tools, source=f"cmd: {args.cmd}")
+            else:
+                path = Path(args.path)
+                report = lint_tools(load_from_file(path), source=str(path))
+        else:
+            path = Path(args.path)
+            report = lint_servers(servers_from_config(path), source=str(path))
+    except LoadError as exc:
+        print(f"agentcheckup: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+
+    _emit(report, args)
+    return _exit_code(report, args.fail_on, args.min_score)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

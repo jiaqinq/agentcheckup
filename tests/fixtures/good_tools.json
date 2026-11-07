@@ -1,0 +1,38 @@
+{
+  "tools": [
+    {
+      "name": "read_file",
+      "description": "Read a UTF-8 text file from the sandbox and return its contents. Use this only for files under the project root; prefer `list_dir` when you need to discover names first. Returns the file body as a string, or an error if the path escapes the sandbox.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path relative to the sandbox root; absolute paths are rejected.",
+            "pattern": "^[^/\\\\].*$"
+          }
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    },
+    {
+      "name": "list_dir",
+      "description": "List entries in one directory under the sandbox root. Use this only when you need names before calling `read_file`; prefer `search_files` for recursive lookups. Returns a JSON array of {name, type} objects.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Directory relative to the sandbox root.",
+            "pattern": "^.*$"
+          }
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      },
+      "annotations": { "readOnlyHint": true, "destructiveHint": false }
+    }
+  ]
+}
