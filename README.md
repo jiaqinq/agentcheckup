@@ -121,7 +121,7 @@ The fastest way to keep a manifest from regressing, and the version you pin is
 the version you run — the action installs from its own checkout.
 
 ```yaml
-- uses: jiaqinq/agentcheckup@v0.5.1
+- uses: jiaqinq/agentcheckup@v0.6.0
   with:
     config: .mcp.json
     fail-on: warning
@@ -177,6 +177,16 @@ false-positive rate made the report untrustworthy, which is worse than no report
 
 It is a heuristic, and the docs say so. `AGT203` is a warning, not a verdict.
 
+## Pick your clients
+
+```bash
+agentcheckup audit --client cursor --client codex
+```
+
+Repeatable, case-insensitive substring against the discovered client labels. An
+unmatched name exits 2 rather than printing an empty report — "found nothing" and
+"you typed it wrong" should not look alike.
+
 ## Look before it runs
 
 `audit` starts every server in your config to read its tool list. That is what
@@ -197,6 +207,10 @@ Nothing was executed.
 Credentials are masked, so the preview is safe to paste into an issue.
 `--no-spawn` goes further: it audits the configuration and never starts anything,
 at the cost of no tool or conflict findings.
+
+`--probe` is the explicit "yes, start them" acknowledgement. It does not change
+what runs today; it exists so that requiring it later is a documented migration
+rather than a surprise.
 
 ## Coverage
 

@@ -84,6 +84,24 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Do not auto-find configs; audit only the ones passed with --config.",
     )
     audit.add_argument(
+        "--client",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help=(
+            "Only audit configs discovered for this client (repeatable, case-insensitive "
+            "substring). e.g. --client cursor --client codex"
+        ),
+    )
+    audit.add_argument(
+        "--probe",
+        action="store_true",
+        help=(
+            "Acknowledge that servers in your config will be started. Today the audit "
+            "starts them either way and only says so; --no-spawn is the way to skip."
+        ),
+    )
+    audit.add_argument(
         "--dry-run",
         action="store_true",
         help=(
@@ -229,6 +247,24 @@ def _redact(argv: list[str]) -> str:
 
 def _run_audit(args: argparse.Namespace) -> int:
     configs = [] if args.no_discover else discover()
+
+    # --client filters *discovered* configs. A file the user named with --config
+    # is audited regardless: they already said they wanted it.
+    if args.client:
+        wanted = [name.lower() for name in args.client]
+        configs = [
+            (label, path)
+            for label, path in configs
+            if any(name in label.lower() for name in wanted)
+        ]
+        if not configs and not args.config:
+            print(
+                f"agentcheckup: no config matched --client {', '.join(args.client)}. "
+                "Omit the flag to audit everything that was found.",
+                file=sys.stderr,
+            )
+            return EXIT_USAGE
+
     for extra in args.config:
         path = Path(extra)
         if not path.is_file():
@@ -273,6 +309,14 @@ def _run_audit(args: argparse.Namespace) -> int:
         print("Re-run without --dry-run to probe them, or add --no-spawn to audit")
         print("the configuration only.")
         return EXIT_OK
+
+    if not args.no_spawn and not getattr(args, "dry_run", False) and not args.probe:
+        print(
+            f"agentcheckup: starting {len(servers)} server(s) from your config. "
+            "Pass --probe to acknowledge, --dry-run to see the commands, or "
+            "--no-spawn to audit the config only.",
+            file=sys.stderr,
+        )
 
     tools_by_server: dict[str, list] = {}
     failures: dict[str, str] = {}

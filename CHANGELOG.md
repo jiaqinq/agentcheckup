@@ -9,6 +9,36 @@ new ids, and removing a rule is a breaking change.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-08
+
+Two controls for the audit. Both are additive: the default run behaves exactly as
+it did in 0.5.1.
+
+### Added
+
+- **`--client NAME`** narrows discovery to the clients you care about
+  (repeatable, case-insensitive substring): `--client cursor --client codex`.
+  Useful when you have five editors installed and only want to audit two. An
+  unmatched name is a usage error rather than a silent empty report.
+
+- **`--probe`** is an explicit acknowledgement that servers in your config will be
+  started. Today it only silences the new notice; it exists so that a future
+  version can require it without surprising anyone. The migration path is:
+  announce now, require later.
+
+  ```console
+  $ agentcheckup audit
+  agentcheckup: starting 3 server(s) from your config. Pass --probe to
+  acknowledge, --dry-run to see the commands, or --no-spawn to audit the config
+  only.
+  ```
+
+### Unchanged on purpose
+
+The default still starts servers. Making that opt-in is a breaking change for
+every existing script, and it was deliberately left for a version that can carry
+a deprecation cycle.
+
 ## [0.5.1] - 2026-11-07
 
 Three defects from a second source audit. All were reproduced with a mock server
