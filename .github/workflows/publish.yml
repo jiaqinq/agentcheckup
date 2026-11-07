@@ -13,10 +13,8 @@ name: Publish
 #     Environment       : pypi
 
 on:
-  # Re-enable the release trigger once the PyPI pending publisher exists:
-  #   on: release: types: [published]
-  # Until then a release would run this and fail with "environment: MISSING",
-  # which is noise on the repository home page.
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
