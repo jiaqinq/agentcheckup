@@ -121,7 +121,7 @@ The fastest way to keep a manifest from regressing, and the version you pin is
 the version you run — the action installs from its own checkout.
 
 ```yaml
-- uses: jiaqinq/agentcheckup@v0.4.3
+- uses: jiaqinq/agentcheckup@v0.4.4
   with:
     config: .mcp.json
     fail-on: warning
@@ -176,6 +176,30 @@ what keeps `search_repositories` and `search_documents` apart — without it the
 false-positive rate made the report untrustworthy, which is worse than no report.
 
 It is a heuristic, and the docs say so. `AGT203` is a warning, not a verdict.
+
+## How well does conflict detection work?
+
+Measured, not asserted. `tests/fixtures/collision_benchmark.json` holds 44
+hand-labelled tool pairs — 20 that should be flagged, 24 that should not — and
+`scripts/benchmark.py` scores the detector against them:
+
+| | value |
+|---|---|
+| pairs | 44 (20 positive, 24 negative) |
+| precision | **0.952** |
+| recall | **1.000** |
+| F1 | 0.976 |
+
+The one disagreement is a pair like `lookup_contact` / `lookup_user` with
+near-identical descriptions: the detector flags it, the label says it should not.
+That is arguably the detector being right and the label being strict.
+
+Two honest caveats. The labels are the author's, not users' — the criterion was
+"would a model picking the wrong one get a materially different result". And this
+benchmark did not exist before 0.4.4; the earlier claim of "zero false positives"
+came from running on 18 tools that contained no conflicts at all, which measured
+nothing. `tests/test_benchmark.py` fails the build if precision or recall drops
+below 0.90.
 
 ## How the score works
 

@@ -91,8 +91,9 @@ trusts, so the scoring and the report both changed.
 ### Notes
 
 - Conflict detection produced **zero false positives** across the 18 real tools
-  from the three official servers. That is the number this project lives or dies
-  on, and it held.
+  from the three official servers. *(Corrected in 0.4.4: that measurement was
+  vacuous — those 18 tools contained no conflicts, so there was nothing to get
+  wrong. A real benchmark replaced it.)*
 
 ## [0.3.0] - 2026-11-07
 

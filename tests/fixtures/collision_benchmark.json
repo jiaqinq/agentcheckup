@@ -1,0 +1,177 @@
+[
+  {"id": "p01", "conflict": true, "why": "同名工具，跨 server",
+   "a": {"server": "files", "name": "read_file", "description": "Read a text file from the sandbox and return its contents."},
+   "b": {"server": "git", "name": "read_file", "description": "Read a file as it exists in a git revision."}},
+
+  {"id": "p02", "conflict": true, "why": "同名，仅大小写不同，检测器会先 lower()",
+   "a": {"server": "files", "name": "read_file", "description": "Read a file from disk."},
+   "b": {"server": "s3", "name": "Read_File", "description": "Read an object from a bucket."}},
+
+  {"id": "p03", "conflict": true, "why": "单复数差异，归一化后同名",
+   "a": {"server": "files", "name": "read_files", "description": "Read several files and return their contents."},
+   "b": {"server": "git", "name": "read_file", "description": "Read one file from a revision."}},
+
+  {"id": "p04", "conflict": true, "why": "描述几乎一致，名字共享 search",
+   "a": {"server": "github", "name": "search_public", "description": "Search public repositories by keyword and return matching repository names."},
+   "b": {"server": "docs", "name": "search_private", "description": "Search private repositories by keyword and return matching repository names."}},
+
+  {"id": "p05", "conflict": true, "why": "同义动词 + 同一宾语，名字共享 file",
+   "a": {"server": "files", "name": "get_file", "description": "Fetch a file by path and return its bytes."},
+   "b": {"server": "docs", "name": "get_files", "description": "Fetch files by path and return their bytes."}},
+
+  {"id": "p06", "conflict": true, "why": "中文近义，描述几乎相同",
+   "a": {"server": "文件服务", "name": "读取文件", "description": "读取指定路径的文件内容并返回文本"},
+   "b": {"server": "文档服务", "name": "读取文档", "description": "读取指定路径的文件内容并返回字符串"}},
+
+  {"id": "p07", "conflict": true, "why": "同名删除工具",
+   "a": {"server": "files", "name": "delete_file", "description": "Delete a file at the given path."},
+   "b": {"server": "storage", "name": "delete_file", "description": "Delete an object from the bucket."}},
+
+  {"id": "p08", "conflict": true, "why": "单复数 + 同一目录语义",
+   "a": {"server": "files", "name": "list_dir", "description": "List entries in one directory under the sandbox root."},
+   "b": {"server": "shell", "name": "list_dirs", "description": "List entries in one directory under the sandbox root."}},
+
+  {"id": "p09", "conflict": true, "why": "同一动作的 issue 创建，描述高度重叠",
+   "a": {"server": "github", "name": "create_issue", "description": "Create an issue with a title, body and assignee in a repository."},
+   "b": {"server": "jira", "name": "create_issues", "description": "Create an issue with a title, body and assignee in a project."}},
+
+  {"id": "p10", "conflict": true, "why": "描述相同，名字只差一个词且共享 run",
+   "a": {"server": "shell", "name": "run_command", "description": "Run a shell command and return stdout and stderr."},
+   "b": {"server": "docker", "name": "run_commands", "description": "Run a shell command and return stdout and stderr."}},
+
+  {"id": "p11", "conflict": true, "why": "同名，一个本地一个远端",
+   "a": {"server": "files", "name": "write_file", "description": "Write text to a file on disk."},
+   "b": {"server": "s3", "name": "write_file", "description": "Write text to an object in a bucket."}},
+
+  {"id": "p12", "conflict": true, "why": "描述几乎逐字相同",
+   "a": {"server": "db", "name": "query_table", "description": "Query rows from a table using a SQL where clause and return them as JSON."},
+   "b": {"server": "warehouse", "name": "query_tables", "description": "Query rows from a table using a SQL where clause and return them as JSON."}},
+
+  {"id": "p13", "conflict": true, "why": "同一份数据的两种读取入口，名字共享 read",
+   "a": {"server": "cache", "name": "read_cache", "description": "Read a value from the cache by key."},
+   "b": {"server": "redis", "name": "read_cached", "description": "Read a value from the cache by key."}},
+
+  {"id": "p14", "conflict": true, "why": "中文同名",
+   "a": {"server": "文件服务", "name": "搜索文件", "description": "按关键词搜索文件并返回匹配的路径"},
+   "b": {"server": "代码服务", "name": "搜索文件", "description": "按关键词搜索仓库中的文件"}},
+
+  {"id": "p15", "conflict": true, "why": "单复数 + 同一搜索动作",
+   "a": {"server": "docs", "name": "search_doc", "description": "Search documents by title across the workspace and return matching ids."},
+   "b": {"server": "wiki", "name": "search_docs", "description": "Search documents by title across the workspace and return matching ids."}},
+
+  {"id": "p16", "conflict": true, "why": "同名上传",
+   "a": {"server": "s3", "name": "upload", "description": "Upload a local file to remote storage."},
+   "b": {"server": "gcs", "name": "upload", "description": "Upload a local file to remote storage."}},
+
+  {"id": "p17", "conflict": true, "why": "描述一致，名字共享 get 与 issue",
+   "a": {"server": "github", "name": "get_issue", "description": "Get one issue by number and return its title, body, state and labels."},
+   "b": {"server": "jira", "name": "get_issues", "description": "Get one issue by number and return its title, body, state and labels."}},
+
+  {"id": "p18", "conflict": true, "why": "同一动作的中英文混写，描述相同",
+   "a": {"server": "files", "name": "read_file", "description": "读取文件内容并返回文本"},
+   "b": {"server": "docs", "name": "read_file", "description": "读取文件内容并返回文本"}},
+
+  {"id": "p19", "conflict": true, "why": "单复数 + 同一删除动作，描述相同",
+   "a": {"server": "db", "name": "drop_table", "description": "Drop a table and all of its rows."},
+   "b": {"server": "warehouse", "name": "drop_tables", "description": "Drop a table and all of its rows."}},
+
+  {"id": "p20", "conflict": true, "why": "同名创建",
+   "a": {"server": "k8s", "name": "create_namespace", "description": "Create a namespace in the cluster."},
+   "b": {"server": "cloud", "name": "create_namespace", "description": "Create a namespace in the project."}},
+
+  {"id": "n01", "conflict": false, "why": "完全不同的事",
+   "a": {"server": "files", "name": "read_file", "description": "Read a text file from the sandbox and return its contents."},
+   "b": {"server": "jira", "name": "create_ticket", "description": "Create a ticket with a title, body and assignee."}},
+
+  {"id": "n02", "conflict": false, "why": "共享 search 但宾语不同，这是最常见的误报来源",
+   "a": {"server": "github", "name": "search_repositories", "description": "Search repositories by name across the org."},
+   "b": {"server": "docs", "name": "search_documents", "description": "Search documents by title across the workspace."}},
+
+  {"id": "n03", "conflict": false, "why": "共享 get 但对象完全不同",
+   "a": {"server": "time", "name": "get_current_time", "description": "Return the current time in a given timezone."},
+   "b": {"server": "weather", "name": "get_weather", "description": "Return the forecast for a city and date."}},
+
+  {"id": "n04", "conflict": false, "why": "共享 list 但宾语不同",
+   "a": {"server": "files", "name": "list_files", "description": "List files under a directory."},
+   "b": {"server": "db", "name": "list_tables", "description": "List tables in a database."}},
+
+  {"id": "n05", "conflict": false, "why": "共享 upload 但媒体类型不同",
+   "a": {"server": "assets", "name": "upload_image", "description": "Upload an image and return its asset id."},
+   "b": {"server": "docs", "name": "upload_document", "description": "Upload a document and return its document id."}},
+
+  {"id": "n06", "conflict": false, "why": "中文共享文件但动作相反",
+   "a": {"server": "文件服务", "name": "读取文件", "description": "读取指定路径的文件内容并返回文本"},
+   "b": {"server": "文件服务", "name": "删除文件", "description": "删除指定路径的文件"}},
+
+  {"id": "n07", "conflict": false, "why": "共享 file 但读与写相反",
+   "a": {"server": "files", "name": "read_file", "description": "Read a file and return its contents."},
+   "b": {"server": "files", "name": "write_file", "description": "Write text to a file."}},
+
+  {"id": "n08", "conflict": false, "why": "共享 git 但动作不同",
+   "a": {"server": "git", "name": "git_commit", "description": "Record staged changes as a commit."},
+   "b": {"server": "git", "name": "git_status", "description": "Show the working tree status."}},
+
+  {"id": "n09", "conflict": false, "why": "名字完全不共享词",
+   "a": {"server": "fetch", "name": "fetch", "description": "Fetch a URL and convert it to markdown."},
+   "b": {"server": "time", "name": "convert_time", "description": "Convert a time between timezones."}},
+
+  {"id": "n10", "conflict": false, "why": "共享 create 但资源不同",
+   "a": {"server": "github", "name": "create_branch", "description": "Create a git branch in a repository."},
+   "b": {"server": "jira", "name": "create_project", "description": "Create a project with a key and name."}},
+
+  {"id": "n11", "conflict": false, "why": "名字共享 file，但一个是读内容一个是读元数据",
+   "a": {"server": "files", "name": "read_file", "description": "Read the full text content of a file from disk."},
+   "b": {"server": "meta", "name": "file_info", "description": "Return size, mtime and permissions for a file."}},
+
+  {"id": "n12", "conflict": false, "why": "共享 search 但一个是代码一个是日志",
+   "a": {"server": "code", "name": "search_code", "description": "Search source files for a pattern."},
+   "b": {"server": "logs", "name": "search_logs", "description": "Search application logs for a pattern."}},
+
+  {"id": "n13", "conflict": false, "why": "共享 send 但渠道不同",
+   "a": {"server": "slack", "name": "send_message", "description": "Send a message to a channel."},
+   "b": {"server": "mail", "name": "send_email", "description": "Send an email to a recipient."}},
+
+  {"id": "n14", "conflict": false, "why": "中文共享仓库但动作不同",
+   "a": {"server": "代码服务", "name": "克隆仓库", "description": "把远端仓库克隆到本地目录"},
+   "b": {"server": "代码服务", "name": "删除仓库", "description": "删除远端仓库及其全部分支"}},
+
+  {"id": "n15", "conflict": false, "why": "共享 run 但一个是测试一个是迁移",
+   "a": {"server": "ci", "name": "run_tests", "description": "Run the test suite and return failures."},
+   "b": {"server": "db", "name": "run_migrations", "description": "Apply pending database migrations."}},
+
+  {"id": "n16", "conflict": false, "why": "共享 get 但一个是配置一个是统计",
+   "a": {"server": "config", "name": "get_config", "description": "Return the current configuration as JSON."},
+   "b": {"server": "metrics", "name": "get_stats", "description": "Return request counts for the last hour."}},
+
+  {"id": "n17", "conflict": false, "why": "描述用词相似但对象不同（跨域同义）",
+   "a": {"server": "crm", "name": "lookup_contact", "description": "Look up a contact by email and return the profile."},
+   "b": {"server": "auth", "name": "lookup_user", "description": "Look up a user by email and return the profile."}},
+
+  {"id": "n18", "conflict": false, "why": "共享 list 但一个是文件一个是容器",
+   "a": {"server": "docker", "name": "list_containers", "description": "List running containers."},
+   "b": {"server": "files", "name": "list_directory", "description": "List entries in a directory."}},
+
+  {"id": "n19", "conflict": false, "why": "共享 delete 但资源不同",
+   "a": {"server": "k8s", "name": "delete_pod", "description": "Delete a pod by name."},
+   "b": {"server": "s3", "name": "delete_object", "description": "Delete an object by key."}},
+
+  {"id": "n20", "conflict": false, "why": "名字共享 repo，一个是读一个是搜",
+   "a": {"server": "github", "name": "get_repo", "description": "Return metadata for one repository."},
+   "b": {"server": "github", "name": "search_repos", "description": "Search repositories by keyword."}},
+
+  {"id": "n21", "conflict": false, "why": "共享 write 但一个是文件一个是日志",
+   "a": {"server": "files", "name": "write_file", "description": "Write text to a file on disk."},
+   "b": {"server": "logs", "name": "write_log", "description": "Append a line to the application log."}},
+
+  {"id": "n22", "conflict": false, "why": "共享 create 但一个是目录一个是分支",
+   "a": {"server": "files", "name": "create_dir", "description": "Create a directory under the sandbox root."},
+   "b": {"server": "git", "name": "create_branch", "description": "Create a branch at the current HEAD."}},
+
+  {"id": "n23", "conflict": false, "why": "中文共享搜索但对象不同",
+   "a": {"server": "代码服务", "name": "搜索代码", "description": "在源码文件中搜索指定模式"},
+   "b": {"server": "日志服务", "name": "搜索日志", "description": "在应用日志中搜索指定模式"}},
+
+  {"id": "n24", "conflict": false, "why": "共享 read 但一个是文件一个是环境变量",
+   "a": {"server": "files", "name": "read_file", "description": "Read a file and return its contents."},
+   "b": {"server": "env", "name": "read_env", "description": "Read an environment variable by name."}}
+]
