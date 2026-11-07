@@ -195,7 +195,7 @@ def render_text(report: Report, verbose: bool = False) -> str:
         lines.extend(_nudge_lines(nudges))
 
     lines.append("")
-    lines.append("  Rule docs: https://github.com/wanjiaqing/agentcheckup#rules")
+    lines.append("  Rule docs: https://github.com/jiaqinq/agentcheckup#rules")
     return "\n".join(lines)
 
 
@@ -246,7 +246,7 @@ def render_sarif(report: Report) -> str:
                     "driver": {
                         "name": "agentcheckup",
                         "version": __version__,
-                        "informationUri": "https://github.com/wanjiaqing/agentcheckup",
+                        "informationUri": "https://github.com/jiaqinq/agentcheckup",
                         "rules": _rule_metadata(),
                     }
                 },

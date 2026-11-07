@@ -2,7 +2,7 @@
 
 > Diagnose your agent setup before your agent does.
 
-[![CI](https://github.com/wanjiaqing/agentcheckup/actions/workflows/ci.yml/badge.svg)](https://github.com/wanjiaqing/agentcheckup/actions/workflows/ci.yml)
+[![CI](https://github.com/jiaqinq/agentcheckup/actions/workflows/ci.yml/badge.svg)](https://github.com/jiaqinq/agentcheckup/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/agentcheckup.svg)](https://pypi.org/project/agentcheckup/)
 [![Python](https://img.shields.io/pypi/pyversions/agentcheckup.svg)](https://pypi.org/project/agentcheckup/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -121,7 +121,7 @@ The fastest way to keep a manifest from regressing, and the version you pin is
 the version you run — the action installs from its own checkout.
 
 ```yaml
-- uses: wanjiaqing/agentcheckup@v0.4.2
+- uses: jiaqinq/agentcheckup@v0.4.2
   with:
     config: .mcp.json
     fail-on: warning

@@ -9,7 +9,7 @@ description = "Diagnose your agent setup: tool conflicts, risky config, context 
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "wanjiaqing" }]
+authors = [{ name = "jiaqinq" }]
 keywords = ["mcp", "model-context-protocol", "agents", "ai", "linter", "security", "cli"]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -33,9 +33,9 @@ dev = ["pytest>=8", "ruff>=0.6"]
 agentcheckup = "agentcheckup.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/wanjiaqing/agentcheckup"
-Issues = "https://github.com/wanjiaqing/agentcheckup/issues"
-Changelog = "https://github.com/wanjiaqing/agentcheckup/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/jiaqinq/agentcheckup"
+Issues = "https://github.com/jiaqinq/agentcheckup/issues"
+Changelog = "https://github.com/jiaqinq/agentcheckup/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agentcheckup"]

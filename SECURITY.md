@@ -14,7 +14,7 @@ Nothing leaves your machine.
 ## Reporting a vulnerability
 
 Use GitHub's private advisory flow:
-`https://github.com/wanjiaqing/agentcheckup/security/advisories/new`
+`https://github.com/jiaqinq/agentcheckup/security/advisories/new`
 
 Please do not open a public issue for a vulnerability. Expect an initial response
 within 7 days.

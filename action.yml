@@ -1,6 +1,6 @@
 name: agentcheckup
 description: Diagnose your agent setup - cross-server tool conflicts, risky MCP config, context budget.
-author: wanjiaqing
+author: jiaqinq
 
 branding:
   icon: activity

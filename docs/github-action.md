@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: wanjiaqing/agentcheckup@main
+      - uses: jiaqinq/agentcheckup@main
         with:
           config: .mcp.json
           fail-on: warning
@@ -45,7 +45,7 @@ Outputs are published even when the gate fails, so you can gate on score without
 parsing the log:
 
 ```yaml
-      - uses: wanjiaqing/agentcheckup@main
+      - uses: jiaqinq/agentcheckup@main
         id: doctor
         with:
           config: .mcp.json
@@ -64,7 +64,7 @@ permissions:
 
 steps:
   - uses: actions/checkout@v4
-  - uses: wanjiaqing/agentcheckup@main
+  - uses: jiaqinq/agentcheckup@main
     with:
       config: .mcp.json
       sarif-file: agentcheckup.sarif
@@ -87,7 +87,7 @@ for locally. On a fresh runner that usually finds nothing, and agentcheckup exit
 For CI, pass the config explicitly:
 
 ```yaml
-      - uses: wanjiaqing/agentcheckup@main
+      - uses: jiaqinq/agentcheckup@main
         with:
           config: |
             .mcp.json
@@ -99,7 +99,7 @@ For CI, pass the config explicitly:
 Spawning every MCP server takes time. If you only need the config checks:
 
 ```yaml
-      - uses: wanjiaqing/agentcheckup@main
+      - uses: jiaqinq/agentcheckup@main
         with:
           config: .mcp.json
           args: --no-spawn
@@ -113,5 +113,5 @@ are skipped too. It is fast and useful, but it is not the full check.
 `@main` tracks the branch. For reproducible CI, pin a tag or a commit SHA:
 
 ```yaml
-      - uses: wanjiaqing/agentcheckup@v0.3.0
+      - uses: jiaqinq/agentcheckup@v0.3.0
 ```

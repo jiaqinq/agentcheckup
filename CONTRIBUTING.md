@@ -6,7 +6,7 @@ your first one takes about ten minutes.
 ## Setup
 
 ```bash
-git clone https://github.com/wanjiaqing/agentcheckup
+git clone https://github.com/jiaqinq/agentcheckup
 cd agentcheckup
 python -m venv .venv
 # Windows: .venv\Scripts\activate
