@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from .discovery import discover, load_servers
+from .discovery import discover, load_servers, take_toml_skips
 from .engine import Report, lint_audit, lint_servers, lint_tools
 from .loader import LoadError, StdioSession, load_from_file, servers_from_config
 from .models import ServerConfig, Severity
@@ -134,6 +134,11 @@ def _dedupe(servers: list[ServerConfig]) -> list[ServerConfig]:
 
     Spawning it twice would double its tools and invent conflicts that do not
     exist, so identity is the launch spec, not the name.
+
+    ``env`` is part of that spec. Two entries with the same command but different
+    environment variables can point at different backends; merging them dropped
+    one from the audit entirely. Values are compared in-process and never
+    rendered, so nothing secret is hashed, stored or printed.
     """
     seen: set[tuple] = set()
     out: list[ServerConfig] = []
@@ -142,12 +147,33 @@ def _dedupe(servers: list[ServerConfig]) -> list[ServerConfig]:
             (server.command or "").lower(),
             tuple(a.lower() for a in server.args),
             (server.url or "").lower(),
+            tuple(sorted(server.env.items())),
         )
         if key in seen:
             continue
         seen.add(key)
         out.append(server)
     return out
+
+
+def _assign_instances(servers: list[ServerConfig]) -> None:
+    """Give every server a key that is unique within this run.
+
+    Names are only unique per config file. When two configs both declare
+    ``filesystem``, they get ``filesystem#1`` and ``filesystem#2`` so their tools
+    occupy separate slots and a collision between them is visible.
+    """
+    counts: dict[str, int] = {}
+    for server in servers:
+        counts[server.name] = counts.get(server.name, 0) + 1
+
+    used: dict[str, int] = {}
+    for server in servers:
+        if counts[server.name] == 1:
+            server.instance = server.name
+            continue
+        used[server.name] = used.get(server.name, 0) + 1
+        server.instance = f"{server.name}#{used[server.name]}"
 
 
 _SECRETISH = re.compile(r"(token|secret|password|passwd|api[_-]?key|credential|auth)", re.I)
@@ -223,7 +249,12 @@ def _run_audit(args: argparse.Namespace) -> int:
     servers: list[ServerConfig] = []
     for label, path in configs:
         servers.extend(load_servers(path, label))
+
+    for note in take_toml_skips():
+        print(f"agentcheckup: could not read TOML config {note}", file=sys.stderr)
+
     servers = _dedupe(servers)
+    _assign_instances(servers)
 
     if not servers:
         print("agentcheckup: configs found, but none declare an MCP server.", file=sys.stderr)
@@ -245,28 +276,32 @@ def _run_audit(args: argparse.Namespace) -> int:
 
     tools_by_server: dict[str, list] = {}
     failures: dict[str, str] = {}
+    partial: dict[str, str] = {}
 
     if args.no_spawn:
         # Config-only mode: no tools, so no tool or conflict findings.
         for server in servers:
-            failures[server.name] = "not started (--no-spawn)"
+            failures[server.key] = "not started (--no-spawn)"
     else:
         for server in servers:
             if not server.command:
-                failures[server.name] = "remote server (url); cannot be introspected over stdio"
+                failures[server.key] = "remote server (url); cannot be introspected over stdio"
                 continue
             argv = [server.command, *server.args]
             try:
                 with StdioSession(argv, timeout=args.timeout, env=server.env) as session:
-                    tools_by_server[server.name] = session.list_tools()
+                    tools_by_server[server.key] = session.list_tools()
+                    if session.partial_reason:
+                        partial[server.key] = session.partial_reason
             except LoadError as exc:
-                failures[server.name] = str(exc).splitlines()[0][:200]
+                failures[server.key] = str(exc).splitlines()[0][:200]
 
     report = lint_audit(
         servers,
         tools_by_server,
         failures={} if args.no_spawn else failures,
         source=f"{len(configs)} config(s)",
+        partial=partial,
     )
     _emit(report, args)
     return _exit_code(report, args.fail_on, args.min_score)

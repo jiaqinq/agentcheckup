@@ -121,7 +121,7 @@ The fastest way to keep a manifest from regressing, and the version you pin is
 the version you run — the action installs from its own checkout.
 
 ```yaml
-- uses: jiaqinq/agentcheckup@v0.5.0
+- uses: jiaqinq/agentcheckup@v0.5.1
   with:
     config: .mcp.json
     fail-on: warning

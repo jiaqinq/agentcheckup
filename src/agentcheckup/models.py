@@ -101,6 +101,14 @@ class ServerConfig:
     env: dict[str, str] = field(default_factory=dict)
     url: str | None = None
     source: str | None = None
+    #: Unique key for this *instance*. Two configs can both declare a server
+    #: called `filesystem`; they are different instances and must not share a
+    #: slot in `tools_by_server`, or one silently overwrites the other.
+    instance: str | None = None
+
+    @property
+    def key(self) -> str:
+        return self.instance or self.name
 
     @classmethod
     def from_raw(cls, name: str, data: dict[str, Any], source: str | None = None) -> ServerConfig:

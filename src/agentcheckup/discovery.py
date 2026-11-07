@@ -170,20 +170,36 @@ def _load_json(path: Path, label: str) -> list[ServerConfig]:
     return _servers_from_payload(payload, f"{label} ({path})")
 
 
+#: TOML files that could not be read, with the reason. A config we skipped must
+#: be announced: silently returning nothing makes a Codex user on Python 3.10
+#: believe they have no servers configured.
+TOML_SKIPPED: list[str] = []
+
+
+def take_toml_skips() -> list[str]:
+    """Drain the skip log so a caller can report it once."""
+    taken = list(TOML_SKIPPED)
+    TOML_SKIPPED.clear()
+    return taken
+
+
 def _load_toml(path: Path, label: str) -> list[ServerConfig]:
     """Codex CLI keeps its servers in TOML, not JSON.
 
-    ``tomllib`` is stdlib from 3.11. On 3.10 we skip the file rather than add a
-    dependency - the zero-dependency promise is worth more than this one client.
+    ``tomllib`` is stdlib from 3.11. On 3.10 the file cannot be read and the
+    zero-dependency promise rules out pulling in ``tomli``, so the skip is
+    recorded and reported rather than swallowed.
     """
     try:
         import tomllib
-    except ModuleNotFoundError:
+    except ImportError:
+        TOML_SKIPPED.append(f"{path} (needs Python 3.11+ for tomllib)")
         return []
 
     try:
         payload = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError) as exc:
+        TOML_SKIPPED.append(f"{path} ({exc})")
         return []
     if not isinstance(payload, dict):
         return []

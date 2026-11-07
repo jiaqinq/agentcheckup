@@ -23,6 +23,9 @@ class Report:
     #: never listed is *unverified*, not clean, and the two must not look alike.
     servers_inspected: int = 0
     servers_unverified: int = 0
+    #: Servers that answered but whose tool list was cut short (page or tool cap,
+    #: or a mid-listing failure). Their tools were seen, but not all of them.
+    servers_partial: int = 0
 
     @property
     def coverage(self) -> float:
@@ -123,9 +126,11 @@ def lint_audit(
     tools_by_server: dict[str, list[Tool]],
     failures: dict[str, str] | None = None,
     source: str = "",
+    partial: dict[str, str] | None = None,
 ) -> Report:
     """The full check: config risk + per-server tool quality + cross-server conflicts."""
     failures = failures or {}
+    partial = partial or {}
     findings = _server_findings(servers)
 
     refs: list[ToolRef] = []
@@ -134,6 +139,17 @@ def lint_audit(
         refs.extend(ToolRef(server=server_name, tool=tool) for tool in tools)
 
     findings.extend(lint_conflicts(refs))
+
+    for server_name, reason in sorted(partial.items()):
+        findings.append(
+            Finding(
+                rule="AGT105",
+                severity=Severity.INFO,
+                message=f"Server {server_name!r} returned a partial tool list: {reason}",
+                tool=server_name,
+                hint="Collisions involving the missing tools were not checked.",
+            )
+        )
 
     for server_name, reason in sorted(failures.items()):
         findings.append(
@@ -147,7 +163,8 @@ def lint_audit(
         )
 
     all_tools = [tool for tools in tools_by_server.values() for tool in tools]
-    inspected = sum(1 for server in servers if server.name in tools_by_server)
+    inspected = sum(1 for server in servers if server.key in tools_by_server)
+    partial_count = sum(1 for server in servers if server.key in partial)
     return Report(
         findings=findings,
         tool_count=len(all_tools),
@@ -157,4 +174,5 @@ def lint_audit(
         server_count=len(servers),
         servers_inspected=inspected,
         servers_unverified=len(servers) - inspected,
+        servers_partial=partial_count,
     )

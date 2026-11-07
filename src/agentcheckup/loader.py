@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import collections
 import contextlib
 import json
 import os
+import queue
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -96,10 +100,15 @@ def servers_from_config(path: str | Path) -> list[ServerConfig]:
 
 
 class StdioSession:
-    """Minimal MCP stdio client: initialize -> tools/list -> close.
+    """Minimal MCP stdio client: initialize -> tools/list (paged) -> close.
 
     Newline-delimited JSON-RPC, per the MCP stdio transport. No SDK dependency,
     so this keeps working when the SDK's API moves.
+
+    Reads happen on a background thread and land in a queue, because
+    ``stdout.readline()`` blocks forever on a server that holds the pipe open and
+    never answers. With a queue, ``timeout`` is a real deadline instead of a
+    stored number nobody reads.
     """
 
     def __init__(
@@ -107,6 +116,8 @@ class StdioSession:
         command: str | list[str],
         timeout: float = 30.0,
         env: dict[str, str] | None = None,
+        max_pages: int = 50,
+        max_tools: int = 10_000,
     ) -> None:
         """``command`` may be a shell string or an argv list.
 
@@ -116,7 +127,18 @@ class StdioSession:
         self.command = command
         self.timeout = timeout
         self.env = env
+        self.max_pages = max_pages
+        self.max_tools = max_tools
         self._label = command if isinstance(command, str) else " ".join(command)
+
+        #: Set when a page or tool cap stopped the listing early. A partial list
+        #: must not be reported as a complete one.
+        self.partial_reason: str | None = None
+        self._queue: queue.Queue[str | None] = queue.Queue()
+        self._stderr: collections.deque[str] = collections.deque(maxlen=40)
+        self._eof = False
+
+    # -- process lifecycle -------------------------------------------------- #
 
     def __enter__(self) -> StdioSession:
         creationflags = 0
@@ -143,7 +165,28 @@ class StdioSession:
             )
         except OSError as exc:
             raise LoadError(f"Could not start {self._label!r}: {exc}") from exc
+
+        threading.Thread(target=self._pump_stdout, daemon=True).start()
+        threading.Thread(target=self._pump_stderr, daemon=True).start()
         return self
+
+    def _pump_stdout(self) -> None:
+        stream = self.proc.stdout
+        try:
+            for line in stream:
+                self._queue.put(line)
+        except (OSError, ValueError):
+            pass
+        finally:
+            self._queue.put(None)  # EOF sentinel
+
+    def _pump_stderr(self) -> None:
+        stream = self.proc.stderr
+        try:
+            for line in stream:
+                self._stderr.append(line.rstrip())
+        except (OSError, ValueError):
+            pass
 
     def __exit__(self, *exc_info) -> None:
         proc = getattr(self, "proc", None)
@@ -154,30 +197,51 @@ class StdioSession:
                 proc.stdin.close()
         try:
             proc.terminate()
-            proc.wait(timeout=5)
+            proc.wait(timeout=1.5)
         except Exception:  # noqa: BLE001 - teardown must never mask the real error
             with contextlib.suppress(Exception):
                 proc.kill()
+                proc.wait(timeout=1.5)
+
+    # -- protocol ----------------------------------------------------------- #
 
     def _send(self, message: dict[str, Any]) -> None:
         assert self.proc.stdin is not None
-        self.proc.stdin.write(json.dumps(message) + "\n")
-        self.proc.stdin.flush()
+        try:
+            self.proc.stdin.write(json.dumps(message) + "\n")
+            self.proc.stdin.flush()
+        except (BrokenPipeError, OSError) as exc:
+            raise LoadError(f"Server closed its stdin: {exc}") from exc
 
-    def _read_until(self, msg_id: int) -> dict[str, Any]:
-        assert self.proc.stdout is not None
+    def _stderr_tail(self) -> str:
+        tail = " | ".join(self._stderr)[-800:]
+        return tail.strip() or "(empty)"
+
+    def _read_until(self, msg_id: int, deadline: float) -> dict[str, Any]:
+        """Read messages until one matches ``msg_id``, or the deadline passes."""
         while True:
-            line = self.proc.stdout.readline()
-            if not line:
-                stderr = ""
-                if self.proc.stderr:
-                    try:
-                        stderr = self.proc.stderr.read()[:800]
-                    except Exception:  # noqa: BLE001
-                        stderr = ""
+            if self._eof:
                 raise LoadError(
-                    f"Server exited before replying to id={msg_id}. stderr: {stderr.strip() or '(empty)'}"
+                    f"Server exited before replying to id={msg_id}. "
+                    f"stderr: {self._stderr_tail()}"
                 )
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise LoadError(
+                    f"Server timed out after {self.timeout:g}s waiting for "
+                    f"id={msg_id}. stderr: {self._stderr_tail()}"
+                )
+            try:
+                line = self._queue.get(timeout=remaining)
+            except queue.Empty:
+                raise LoadError(
+                    f"Server timed out after {self.timeout:g}s waiting for "
+                    f"id={msg_id}. stderr: {self._stderr_tail()}"
+                ) from None
+
+            if line is None:
+                self._eof = True
+                continue
             line = line.strip()
             if not line:
                 continue
@@ -191,6 +255,14 @@ class StdioSession:
                 return message
 
     def list_tools(self) -> list[Tool]:
+        """initialize, then page through tools/list until nextCursor runs out.
+
+        One deadline covers the whole exchange: a server cannot buy itself extra
+        time by answering every request slowly.
+        """
+        self.partial_reason = None
+        deadline = time.monotonic() + self.timeout
+
         self._send(
             {
                 "jsonrpc": "2.0",
@@ -199,16 +271,54 @@ class StdioSession:
                 "params": {
                     "protocolVersion": PROTOCOL_VERSION,
                     "capabilities": {},
-                    "clientInfo": {"name": "agentcheckup", "version": "0.1.0"},
+                    "clientInfo": {"name": "agentcheckup", "version": _client_version()},
                 },
             }
         )
-        self._read_until(1)
+        self._read_until(1, deadline)
         self._send({"jsonrpc": "2.0", "method": "notifications/initialized"})
-        self._send({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
-        reply = self._read_until(2)
-        result = reply.get("result") or {}
-        tools = result.get("tools") if isinstance(result, dict) else None
-        if not isinstance(tools, list):
-            raise LoadError("Server replied to tools/list without a tools array.")
-        return [Tool.from_raw(item) for item in tools if isinstance(item, dict)]
+
+        tools: list[Tool] = []
+        cursor: str | None = None
+        seen_cursors: set[str] = set()
+        msg_id = 2
+
+        while True:
+            params: dict[str, Any] = {"cursor": cursor} if cursor else {}
+            self._send(
+                {"jsonrpc": "2.0", "id": msg_id, "method": "tools/list", "params": params}
+            )
+            reply = self._read_until(msg_id, deadline)
+            result = reply.get("result") or {}
+            page = result.get("tools") if isinstance(result, dict) else None
+            if not isinstance(page, list):
+                raise LoadError("Server replied to tools/list without a tools array.")
+
+            tools.extend(Tool.from_raw(item) for item in page if isinstance(item, dict))
+
+            if len(tools) > self.max_tools:
+                tools = tools[: self.max_tools]
+                self.partial_reason = f"stopped after {self.max_tools} tools"
+                break
+
+            cursor = result.get("nextCursor")
+            if not cursor:
+                break
+            if cursor in seen_cursors:
+                raise LoadError(
+                    f"Server repeated cursor {cursor!r}; pagination would never end."
+                )
+            seen_cursors.add(cursor)
+
+            if len(seen_cursors) >= self.max_pages:
+                self.partial_reason = f"stopped after {self.max_pages} pages"
+                break
+            msg_id += 1
+
+        return tools
+
+
+def _client_version() -> str:
+    from .report import __version__
+
+    return __version__

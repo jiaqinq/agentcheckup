@@ -9,6 +9,67 @@ new ids, and removing a rule is a breaking change.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-07
+
+Three defects from a second source audit. All were reproduced with a mock server
+before being fixed; none came from a user report, because there are no users yet.
+
+### Fixed — the timeout was decorative
+
+`StdioSession` stored `self.timeout` and never read it. `_read_until` called
+`self.proc.stdout.readline()`, which blocks forever on a server that holds the
+pipe open and never answers. **`--timeout 5` did nothing**: a stalled server hung
+the whole audit until the process was killed by hand.
+
+Reads now happen on a background thread into a queue, so the timeout is a real
+deadline. One deadline covers `initialize` and every page of `tools/list`, so a
+server cannot buy itself extra time by answering each request slowly. A timeout
+raises `LoadError` — it is never reported as "this server has no tools". Teardown
+terminates, waits 1.5s, then kills, so no orphans are left behind.
+
+Reproduced against `tests/fixtures/mock_mcp.py` in four modes: never reads
+(`hang-start`), never answers `initialize` (`hang-init`), never answers
+`tools/list` (`hang-list`), writes half a JSON line and stops (`partial-json`).
+
+### Fixed — `tools/list` pagination was ignored
+
+`list_tools()` sent one request and returned `result["tools"]`. Servers that page
+— which the spec supports — had every page after the first silently dropped. The
+audit then reported conflicts over an incomplete manifest.
+
+`nextCursor` is now followed, pages merged, and a repeated cursor raises instead
+of looping. Page and tool counts are capped, and a capped listing sets
+`partial_reason` so a partial result is never presented as a complete one.
+
+### Fixed — two servers that only shared a name collided
+
+- `_dedupe` keyed identity on `(command, args, url)` and ignored `env`. Two
+  entries with the same command pointed at different backends by environment
+  variable were merged and one vanished from the audit. `env` is now part of the
+  identity, compared in-process and never rendered, so nothing secret is hashed
+  or printed.
+- `tools_by_server` was keyed by the bare server name. When two configs both
+  declared `filesystem`, the second assignment overwrote the first: its tools
+  disappeared and no collision between the two could be found. Servers now carry
+  an instance key (`filesystem#1`, `filesystem#2`) and occupy separate slots.
+
+### Fixed — a skipped config was silent
+
+`_load_toml` returned `[]` when `tomllib` was missing, which is every Python 3.10
+install. A Codex user on 3.10 saw zero servers and no explanation. The skip is now
+recorded and printed to stderr with the reason, so "no servers found" and "I could
+not read your config" are distinguishable. Unreadable or malformed TOML is
+reported the same way.
+
+The zero-dependency promise still holds: this reports the limitation instead of
+pulling in `tomli`.
+
+### Added
+
+- Coverage distinguishes **partial** from unverified: a server that answered but
+  whose listing was cut short is reported as partial, with an `AGT105` finding
+  saying which collisions went unchecked.
+
 ## [0.5.0] - 2026-11-07
 
 Two correctness defects against the specification, and one algorithmic one.
