@@ -132,12 +132,12 @@ def broad_fs_root(server: ServerConfig):
     return None
 
 
-@config_rule("AGT105", Severity.WARNING, "Remote server uses plain HTTP")
+@config_rule("AGT108", Severity.WARNING, "Remote server uses plain HTTP")
 def insecure_url(server: ServerConfig):
     """Tool calls carry your data and often your credentials."""
     if server.url and server.url.lower().startswith("http://"):
         return Finding(
-            rule="AGT105",
+            rule="AGT108",
             severity=Severity.WARNING,
             message=f"Server {server.name!r} uses an unencrypted http:// endpoint.",
             tool=server.name,

@@ -165,7 +165,7 @@ def test_invisible_characters_detected():
 def test_config_fixture_flags_expected_rules():
     report = lint_servers(servers_from_config(FIXTURES / "claude_desktop_config.json"))
     ids = rule_ids(report)
-    for expected in ("AGT101", "AGT103", "AGT104", "AGT105", "AGT106", "AGT107"):
+    for expected in ("AGT101", "AGT103", "AGT104", "AGT106", "AGT107", "AGT108"):
         assert expected in ids, f"{expected} did not fire; got {sorted(ids)}"
 
 

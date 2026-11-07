@@ -9,6 +9,31 @@ new ids, and removing a rule is a breaking change.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-07
+
+Both fixes came out of an external fact-check of the project, not from a bug
+report: the repository has no users yet, so nothing surfaced them in the field.
+
+### Fixed
+
+- **`AGT105` was used by two unrelated rules.** "Server did not return a tool
+  list" (suite) and "Remote server uses plain HTTP" (config) shared the id, with
+  different severities. Rule ids are the tool's public API — people put them in
+  suppression lists — so two checks under one name is worse than either check
+  being wrong. The config rule is now `AGT108`; `AGT105` keeps the meaning every
+  document and the README already gave it.
+- **README pointed the GitHub Action at `@v0.3.0`**, a tag that no longer exists.
+  Anyone copying the snippet got a resolution failure. Now `@v0.4.1`.
+- `docs/rules.md` listed `AGT105` twice and described the suite rule as a
+  warning when it had been downgraded to info.
+
+### Added
+
+- `tests/test_registry.py`: ids are unique across all three registries, well
+  formed, and — for every rule that constructs its own `Finding` — the severity
+  emitted matches the severity registered. That last check is the one that would
+  have caught the duplicate before it shipped.
+
 ## [0.4.0] - 2026-11-07
 
 Calibration release, driven by the first run against real servers rather than

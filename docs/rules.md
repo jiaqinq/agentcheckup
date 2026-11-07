@@ -163,9 +163,6 @@ also defeats the escaping the client already did.
 Granting the filesystem root gives the agent read-write access to everything. One
 prompt injection is then enough to reach SSH keys and browser profiles.
 
-### AGT105 · warning · Remote server uses plain HTTP
-Tool calls carry your data, often your credentials.
-
 ### AGT106 · error · Config passes a permission-bypass flag
 `--dangerously-skip-permissions`, `--yolo`, `--allow-all`, `--no-sandbox`. These
 disable the only confirmation step between the model and your disk.
@@ -174,11 +171,14 @@ disable the only confirmation step between the model and your disk.
 Config files get committed, screenshotted and pasted into issues. Reference an
 env var instead.
 
+### AGT108 · warning · Remote server uses plain HTTP
+Tool calls carry your data, often your credentials, over an unencrypted link.
+
 ### AGT105 · info · Server did not return a tool list
 The server failed to start, timed out, or is a remote `url` endpoint that cannot
 be introspected over stdio.
 
-This is a warning rather than an error on purpose: one broken server must not
+This is info rather than an error on purpose: one broken server must not
 stop you auditing the other four. But an unreachable server is also an unaudited
 one — its tools were never checked for conflicts.
 
