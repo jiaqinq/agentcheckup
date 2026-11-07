@@ -42,6 +42,10 @@ STOPWORDS = frozenset(
 
 WORD = re.compile(r"[a-z0-9]+")
 
+#: CJK ideographs, extension A included. Matched per character because Chinese
+#: has no word delimiters and a real segmenter would be a dependency.
+CJK = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+")
+
 
 @dataclass(frozen=True)
 class ToolRef:
@@ -94,13 +98,33 @@ def _stem(word: str) -> str:
     return word
 
 
+def _cjk_tokens(text: str) -> set[str]:
+    """Character bigrams over every CJK run.
+
+    Chinese has no spaces, so ``WORD`` returns nothing and two Chinese tools
+    would look like two empty sets — silently, which is the worst outcome. A real
+    segmenter is a dependency; character bigrams are the standard cheap
+    substitute: 读取文件 -> 读取, 取文, 文件.
+
+    A single-character run is kept whole, so 读 still matches 读.
+    """
+    out: set[str] = set()
+    for run in CJK.findall(text):
+        if len(run) == 1:
+            out.add(run)
+        else:
+            out.update(run[i : i + 2] for i in range(len(run) - 1))
+    return out
+
+
 def tokens(text: str) -> set[str]:
-    """Lowercase word set, stopwords removed, crude plural stemming."""
-    return {
+    """Lowercase word set, stopwords removed, crude plural stemming, plus CJK."""
+    latin = {
         _stem(w)
         for w in WORD.findall(text.lower())
         if w not in STOPWORDS and len(w) > 1
     }
+    return latin | _cjk_tokens(text)
 
 
 def jaccard(a: set[str], b: set[str]) -> float:
@@ -111,7 +135,8 @@ def jaccard(a: set[str], b: set[str]) -> float:
 
 
 def name_tokens(name: str) -> set[str]:
-    return {_stem(w) for w in WORD.findall(name.lower()) if len(w) > 1}
+    latin = {_stem(w) for w in WORD.findall(name.lower()) if len(w) > 1}
+    return latin | _cjk_tokens(name)
 
 
 def similarity(a: ToolRef, b: ToolRef) -> float:

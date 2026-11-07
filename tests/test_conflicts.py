@@ -128,3 +128,40 @@ def test_audit_tokens_sum_across_servers():
     tools = {"a": [tool("alpha_tool")], "b": [tool("beta_tool")]}
     report = lint_audit(servers, tools)
     assert report.tokens > 0
+
+
+# --------------------------------------------------------------------------- #
+# CJK support
+# --------------------------------------------------------------------------- #
+
+
+def test_cjk_runs_become_character_bigrams():
+    assert tokens("读取文件") == {"读取", "取文", "文件"}
+
+
+def test_single_cjk_character_is_kept_whole():
+    assert tokens("读") == {"读"}
+
+
+def test_cjk_and_latin_mix():
+    got = tokens("read 文件")
+    assert "read" in got
+    assert "文件" in got
+
+
+def test_chinese_near_duplicates_are_flagged():
+    """Before CJK support this pair produced two empty token sets and no finding."""
+    a = ref("文件服务", "读取文件", "读取指定路径的文件内容并返回文本")
+    b = ref("文档服务", "读取文档", "读取指定路径的文件内容并返回字符串")
+    assert "AGT203" in {c.rule for c in detect_conflicts([a, b])}
+
+
+def test_chinese_unrelated_tools_are_not_flagged():
+    a = ref("文件服务", "读取文件", "读取指定路径的文件内容并返回文本")
+    b = ref("文件服务", "删除文件", "删除指定路径的文件")
+    assert detect_conflicts([a, b]) == []
+
+
+def test_english_scores_are_unchanged_by_cjk_support():
+    """The CJK path must not touch Latin tokenisation."""
+    assert tokens("Read a file") == {"read", "file"}

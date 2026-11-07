@@ -121,7 +121,7 @@ The fastest way to keep a manifest from regressing, and the version you pin is
 the version you run — the action installs from its own checkout.
 
 ```yaml
-- uses: jiaqinq/agentcheckup@v0.4.2
+- uses: jiaqinq/agentcheckup@v0.4.3
   with:
     config: .mcp.json
     fail-on: warning
@@ -164,6 +164,11 @@ Each tool pair across servers is scored on two signals:
 
 - **name overlap** — normalised token Jaccard (`read_files` ≡ `read_file`)
 - **description overlap** — token Jaccard over stopword-stripped, plural-stemmed words
+
+Chinese is tokenised as character bigrams (`读取文件` → `读取`, `取文`, `文件`) rather
+than by a segmenter, because a segmenter is a dependency. It is cruder than a real
+word split, but without it every Chinese description produced an empty token set
+and two Chinese tools could never be compared at all.
 
 A pair is flagged when the descriptions overlap ≥ 65% **and** the names share a
 head noun, or when the blended score clears 0.55. The shared-noun requirement is
