@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -82,6 +83,14 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Do not auto-find configs; audit only the ones passed with --config.",
     )
+    audit.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Print the commands that would be started, then exit. Nothing is "
+            "executed. Implies --no-spawn."
+        ),
+    )
     _add_output_flags(audit)
 
     scan = sub.add_parser("scan", help="Lint one tools/list manifest (file or live server).")
@@ -141,6 +150,57 @@ def _dedupe(servers: list[ServerConfig]) -> list[ServerConfig]:
     return out
 
 
+_SECRETISH = re.compile(r"(token|secret|password|passwd|api[_-]?key|credential|auth)", re.I)
+
+#: Common credential prefixes, plus long opaque strings. The point is to catch
+#: the value that follows `--api-key`, not the flag name itself.
+_TOKENLIKE = re.compile(r"^(sk-|ghp_|gho_|ghs_|xox[bpas]-|AKIA|eyJ)[A-Za-z0-9_.-]{8,}$")
+
+
+def _looks_like_secret(text: str) -> bool:
+    if _TOKENLIKE.match(text):
+        return True
+    return len(text) >= 32 and re.fullmatch(r"[A-Za-z0-9_\-]+", text) is not None
+
+
+def _display(text: str) -> str:
+    """Quote an argument for reading, not for re-execution.
+
+    shlex.quote is POSIX-shaped and produces `'"'"'` noise on Windows, which is
+    where most of these configs live. This only has to be unambiguous to a human.
+    """
+    if not text or any(ch.isspace() for ch in text):
+        return '"' + text.replace('"', '\\"') + '"'
+    return text
+
+
+def _redact(argv: list[str]) -> str:
+    """Render a command line with credentials masked.
+
+    ``--dry-run`` exists so a user can see what would be executed before allowing
+    it; printing the token in that preview would defeat the point. The value is
+    masked, not the flag, so `--api-key <redacted>` still says what is happening.
+    """
+    shown: list[str] = []
+    redact_next = False
+    for arg in argv:
+        text = str(arg)
+        if redact_next:
+            shown.append("<redacted>")
+            redact_next = False
+            continue
+        if _SECRETISH.search(text):
+            if "=" in text:
+                key = text.split("=", 1)[0]
+                shown.append(f"{key}=<redacted>")
+            else:
+                shown.append(_display(text))
+                redact_next = True
+            continue
+        shown.append("<redacted>" if _looks_like_secret(text) else _display(text))
+    return " ".join(shown)
+
+
 def _run_audit(args: argparse.Namespace) -> int:
     configs = [] if args.no_discover else discover()
     for extra in args.config:
@@ -168,6 +228,20 @@ def _run_audit(args: argparse.Namespace) -> int:
     if not servers:
         print("agentcheckup: configs found, but none declare an MCP server.", file=sys.stderr)
         return EXIT_USAGE
+
+    if getattr(args, "dry_run", False):
+        print(f"Would start {len(servers)} server(s) from {len(configs)} config(s):")
+        print()
+        for server in servers:
+            if not server.command:
+                print(f"  {server.name:20} (url) {server.url or ''} — not started")
+                continue
+            print(f"  {server.name:20} {_redact([server.command, *server.args])}")
+        print()
+        print("Nothing was executed.")
+        print("Re-run without --dry-run to probe them, or add --no-spawn to audit")
+        print("the configuration only.")
+        return EXIT_OK
 
     tools_by_server: dict[str, list] = {}
     failures: dict[str, str] = {}

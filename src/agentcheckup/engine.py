@@ -19,6 +19,17 @@ class Report:
     source: str = ""
     kind: str = "tools"
     server_count: int = 0
+    #: How much of the manifest was actually observed. A server whose tools were
+    #: never listed is *unverified*, not clean, and the two must not look alike.
+    servers_inspected: int = 0
+    servers_unverified: int = 0
+
+    @property
+    def coverage(self) -> float:
+        """Share of configured servers whose tool list was actually read."""
+        if not self.server_count:
+            return 1.0
+        return self.servers_inspected / self.server_count
 
     @property
     def score(self) -> int:
@@ -136,6 +147,7 @@ def lint_audit(
         )
 
     all_tools = [tool for tools in tools_by_server.values() for tool in tools]
+    inspected = sum(1 for server in servers if server.name in tools_by_server)
     return Report(
         findings=findings,
         tool_count=len(all_tools),
@@ -143,4 +155,6 @@ def lint_audit(
         source=source,
         kind="audit",
         server_count=len(servers),
+        servers_inspected=inspected,
+        servers_unverified=len(servers) - inspected,
     )

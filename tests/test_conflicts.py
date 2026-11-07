@@ -165,3 +165,36 @@ def test_chinese_unrelated_tools_are_not_flagged():
 def test_english_scores_are_unchanged_by_cjk_support():
     """The CJK path must not touch Latin tokenisation."""
     assert tokens("Read a file") == {"read", "file"}
+
+
+# --------------------------------------------------------------------------- #
+# Scale
+# --------------------------------------------------------------------------- #
+
+
+def test_hard_collision_is_found_in_a_large_manifest():
+    """Grouping must not depend on the pair count staying small.
+
+    The previous implementation built every combination up front (763 MiB at
+    5,000 tools) and only then filtered. This asserts the answer survives the
+    rewrite; scripts/perf.py records the cost.
+    """
+    refs = [
+        ref(f"server{i % 20}", f"tool_{i}", f"Operation {i} on a resource.")
+        for i in range(2000)
+    ]
+    refs.append(ref("planted", "tool_0", "A different tool with the same name."))
+
+    found = detect_conflicts(refs)
+    assert any("planted" in (c.a.server, c.b.server) for c in found if c.rule == "AGT201")
+
+
+def test_soft_phase_is_bounded_by_the_budget():
+    """A pathological manifest must not run unbounded soft comparisons."""
+    refs = [
+        ref(f"server{i % 50}", f"read_file_{i}", "Read a file and return its text.")
+        for i in range(3000)
+    ]
+    # A tiny budget keeps the call fast; the point is that it returns at all.
+    found = detect_conflicts(refs, max_pairs=100)
+    assert isinstance(found, list)

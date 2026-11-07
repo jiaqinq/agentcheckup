@@ -9,6 +9,62 @@ new ids, and removing a rule is a breaking change.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-07
+
+Two correctness defects against the specification, and one algorithmic one.
+All three were found by auditing the source against the spec, not by a report.
+
+### Changed
+
+- **`AGT001` now follows the specification instead of a guess about it.** The
+  spec says tool names SHOULD be 1–128 characters of `[A-Za-z0-9_.-]`. The rule
+  enforced `[A-Za-z0-9_-]{1,64}` as an **error**, so it flagged `admin.tools.list`
+  — a name the spec itself uses as an example — and rejected any name of 65–128
+  characters. It is now a **warning** covering the spec's charset and length,
+  because SHOULD is not MUST.
+
+- **`AGT201` now requires byte-identical names.** The spec says names SHOULD be
+  treated as case-sensitive, so `Read_File` and `read_file` are distinct tools.
+  They are still worth flagging, but as `AGT202` — a portability risk — not as an
+  unreachable duplicate.
+
+### Fixed
+
+- **camelCase and PascalCase names were never split into words.** `name_tokens`
+  lowercased first, so `readFiles` became the single token `{readfile}` while
+  `read_files` became `{read, file}`. The two spellings of the same tool could
+  never match, at any threshold. Names are now split on camel boundaries,
+  including acronym runs (`parseHTML` → `parse`, `html`).
+
+- **`detect_conflicts` materialised every pair before filtering.**
+  `list(combinations(refs, 2))` allocated 12.5M tuples at 5,000 tools — 763 MiB
+  measured — and only then applied the `max_pairs` guard. Exact and normalised
+  collisions are now found by grouping, which is O(n); the soft phase enumerates
+  candidates from a token index under a budget, rarest tokens first.
+
+  Measured (`scripts/perf.py`), 5,000 tools: **763 MiB → 8 MiB** peak, with a
+  planted hard collision still reported at every size tested (50/200/1k/5k).
+
+### Added
+
+- **`--dry-run`** prints the exact command line for every server that *would* be
+  started, then exits without executing anything. Credentials are masked
+  (`--api-key <redacted>`) so the preview can be pasted into an issue. The
+  default behaviour is unchanged — this is an opt-in way to look before you leap.
+- **Coverage reporting.** The report now states how many configured servers were
+  actually inspected, and how many are unverified:
+  `coverage: 2/3 server(s) inspected (67%), 1 unverified`. A server that never
+  answered is not a clean server, and the two no longer look alike. Present in
+  text, JSON (`servers_inspected`, `servers_unverified`, `coverage`) and unchanged
+  in SARIF.
+
+### Known limits
+
+- The soft phase is capped by `max_pairs` (default 60,000 candidate pairs). On a
+  manifest large enough to hit the cap, low-similarity overlaps beyond it are not
+  scored. Hard and normalised collisions are never truncated.
+- `MAX_PER_GROUP` caps findings for one name shared by many servers at 200.
+
 ## [0.4.2] - 2026-11-07
 
 Three claims the tool made that it had not earned. All were found by an external

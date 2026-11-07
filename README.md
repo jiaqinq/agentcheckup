@@ -121,7 +121,7 @@ The fastest way to keep a manifest from regressing, and the version you pin is
 the version you run — the action installs from its own checkout.
 
 ```yaml
-- uses: jiaqinq/agentcheckup@v0.4.4
+- uses: jiaqinq/agentcheckup@v0.5.0
   with:
     config: .mcp.json
     fail-on: warning
@@ -176,6 +176,57 @@ what keeps `search_repositories` and `search_documents` apart — without it the
 false-positive rate made the report untrustworthy, which is worse than no report.
 
 It is a heuristic, and the docs say so. `AGT203` is a warning, not a verdict.
+
+## Look before it runs
+
+`audit` starts every server in your config to read its tool list. That is what
+makes cross-server conflict detection possible, and it is also the part worth
+being careful about. `--dry-run` shows exactly what would be executed and stops:
+
+```console
+$ agentcheckup audit --dry-run
+
+Would start 2 server(s) from 1 config(s):
+
+  files                python /opt/mcp/files.py
+  github               npx -y @modelcontextprotocol/server-github --api-key <redacted>
+
+Nothing was executed.
+```
+
+Credentials are masked, so the preview is safe to paste into an issue.
+`--no-spawn` goes further: it audits the configuration and never starts anything,
+at the cost of no tool or conflict findings.
+
+## Coverage
+
+A server that never answered is not a clean server. The report says which is which:
+
+```console
+coverage: 2/3 server(s) inspected (67%), 1 unverified
+```
+
+`servers_inspected`, `servers_unverified` and `coverage` are in the JSON output
+too. Findings from an unverified server are reported as `AGT105`, never as
+"nothing wrong found".
+
+## Does it scale?
+
+`detect_conflicts` groups by exact name and by normalised name, so hard
+collisions cost O(n) rather than O(n²). Only the soft-overlap phase enumerates
+pairs, from a token index, rarest tokens first, under a budget.
+
+Measured with `scripts/perf.py` on a synthetic manifest:
+
+| tools | pairs | old peak | now peak | now time | planted collision found |
+|---:|---:|---:|---:|---:|:--:|
+| 50 | 1,225 | 0 MiB | 0 MiB | 0.015 s | yes |
+| 200 | 19,900 | 1 MiB | 0 MiB | 0.186 s | yes |
+| 1,000 | 499,500 | 30 MiB | 5 MiB | 2.6 s | yes |
+| 5,000 | 12,497,500 | 763 MiB | 8 MiB | 2.7 s | yes |
+
+"old peak" is `list(combinations(refs, 2))` alone — what the first version
+allocated before filtering anything.
 
 ## How well does conflict detection work?
 

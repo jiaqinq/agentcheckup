@@ -99,3 +99,83 @@ def test_side_outputs_are_written_even_when_the_gate_fails(tmp_path):
     code = main(["scan", str(FIXTURES / "bad_tools.json"), "--json-out", str(json_out)])
     assert code == 1
     assert json_out.is_file()
+
+
+# --------------------------------------------------------------------------- #
+# --dry-run and coverage
+# --------------------------------------------------------------------------- #
+
+
+def _write_config(tmp_path: Path, servers: dict) -> Path:
+    path = tmp_path / "cfg.json"
+    path.write_text(json.dumps({"mcpServers": servers}), encoding="utf-8")
+    return path
+
+
+def test_dry_run_does_not_start_anything(tmp_path, capsys):
+    marker = tmp_path / "SHOULD_NOT_EXIST"
+    cfg = _write_config(
+        tmp_path,
+        {
+            "marker": {
+                "command": "python",
+                "args": ["-c", f"open(r'{marker}','w').write('x')"],
+            }
+        },
+    )
+
+    code = main(["audit", "--no-discover", "--config", str(cfg), "--dry-run"])
+
+    assert code == 0
+    assert not marker.exists(), "dry-run started a process"
+    assert "Nothing was executed" in capsys.readouterr().out
+
+
+def test_dry_run_redacts_credentials_but_keeps_the_flag(tmp_path, capsys):
+    cfg = _write_config(
+        tmp_path,
+        {
+            "gh": {
+                "command": "npx",
+                "args": ["-y", "server", "--api-key", "sk-abcdefghijklmnopqrstuvwxyz123456"],
+            }
+        },
+    )
+
+    main(["audit", "--no-discover", "--config", str(cfg), "--dry-run"])
+    out = capsys.readouterr().out
+
+    assert "sk-abcdefghijklmnopqrstuvwxyz123456" not in out
+    assert "--api-key" in out
+    assert "<redacted>" in out
+
+
+def test_coverage_counts_servers_that_never_answered():
+    from agentcheckup.engine import lint_audit
+    from agentcheckup.models import ServerConfig
+
+    servers = [
+        ServerConfig(name="a", command="x"),
+        ServerConfig(name="b", command="y"),
+        ServerConfig(name="c", command="z"),
+    ]
+    report = lint_audit(servers, tools_by_server={"a": []}, failures={})
+
+    assert report.server_count == 3
+    assert report.servers_inspected == 1
+    assert report.servers_unverified == 2
+    assert report.coverage == pytest.approx(1 / 3)
+
+
+def test_coverage_appears_in_text_and_json(tmp_path, capsys):
+    from agentcheckup.engine import lint_audit
+    from agentcheckup.models import ServerConfig
+    from agentcheckup.report import render_json, render_text
+
+    servers = [ServerConfig(name="a", command="x"), ServerConfig(name="b", command="y")]
+    report = lint_audit(servers, tools_by_server={"a": []}, failures={})
+
+    assert "1/2 server(s) inspected" in render_text(report)
+    payload = json.loads(render_json(report))
+    assert payload["servers_unverified"] == 1
+    assert payload["coverage"] == 0.5

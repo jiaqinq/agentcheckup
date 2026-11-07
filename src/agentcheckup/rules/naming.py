@@ -7,33 +7,41 @@ import re
 from ..models import Finding, Severity, Tool
 from .base import tool_rule
 
-ALLOWED = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+# The specification says names SHOULD be 1-128 characters of
+# [A-Za-z0-9_.-]. Dots are included: `admin.tools.list` is an example the
+# spec itself uses, so rejecting it produced a false error on a legal name.
+ALLOWED = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 SNAKE = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
 
 
 @tool_rule(
     "AGT001",
-    Severity.ERROR,
-    "Tool name is not a valid MCP identifier",
+    Severity.WARNING,
+    "Tool name is outside the characters the spec suggests",
 )
 def name_charset(tool: Tool):
-    """MCP tool names must be 1-64 chars of [A-Za-z0-9_-].
+    """The spec says tool names SHOULD be 1-128 chars of [A-Za-z0-9_.-].
 
-    Anything else is rejected by strict clients and silently mangled by others,
-    which turns into a "tool not found" bug the model cannot recover from.
+    SHOULD, not MUST: a name outside that set is a portability risk rather than
+    a protocol violation, so this is a warning. Strict clients reject such names
+    and lenient ones mangle them, which surfaces as a "tool not found" the model
+    cannot recover from.
     """
     if not tool.name:
         return Finding(
             rule="AGT001",
-            severity=Severity.ERROR,
+            severity=Severity.WARNING,
             message="Tool has an empty name.",
             hint="Every tool needs a non-empty `name`.",
         )
     if not ALLOWED.match(tool.name):
         return Finding(
             rule="AGT001",
-            severity=Severity.ERROR,
-            message=f"Tool name {tool.name!r} contains characters outside [A-Za-z0-9_-] or exceeds 64 chars.",
+            severity=Severity.WARNING,
+            message=(
+                f"Tool name {tool.name!r} is outside the suggested "
+                f"[A-Za-z0-9_.-] set or exceeds 128 chars."
+            ),
             tool=tool.name,
             hint="Rename to something like `read_file` or `search-docs`.",
         )

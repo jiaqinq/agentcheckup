@@ -75,3 +75,60 @@ def test_emitted_severity_matches_the_registry(rule):
     assert emitted == {expected}, (
         f"{rule.id} is registered as {expected} but emits {sorted(emitted)}"
     )
+
+
+# --------------------------------------------------------------------------- #
+# Conflict rules pass their severity into a helper rather than writing it as a
+# literal, so the parametrised test above skips them. Check them by behaviour.
+# --------------------------------------------------------------------------- #
+
+
+def _conflict_ref(server: str, name: str, description: str):
+    from agentcheckup.conflicts import ToolRef
+    from agentcheckup.models import Tool
+
+    tool = Tool.from_raw(
+        {
+            "name": name,
+            "description": description,
+            "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+        }
+    )
+    return ToolRef(server=server, tool=tool)
+
+
+def test_conflict_rules_emit_their_registered_severity():
+    from agentcheckup.conflicts import detect_conflicts
+
+    registry = {rule.id: rule.severity for rule in SUITE_RULES}
+
+    cases = {
+        "AGT201": (
+            _conflict_ref("a", "read_file", "Read a file and return its contents."),
+            _conflict_ref("b", "read_file", "Read a file from a revision."),
+        ),
+        "AGT202": (
+            _conflict_ref("a", "readFiles", "Read a file and return its contents."),
+            _conflict_ref("b", "read_files", "Read a file from a revision."),
+        ),
+        "AGT203": (
+            _conflict_ref(
+                "a",
+                "search_public",
+                "Search public repositories by keyword and return matching repository names.",
+            ),
+            _conflict_ref(
+                "b",
+                "search_private",
+                "Search private repositories by keyword and return matching repository names.",
+            ),
+        ),
+    }
+
+    for rule_id, (a, b) in cases.items():
+        found = [c for c in detect_conflicts([a, b]) if c.rule == rule_id]
+        assert found, f"{rule_id} did not fire for its own case"
+        assert found[0].severity is registry[rule_id], (
+            f"{rule_id} emits {found[0].severity.name} but is registered as "
+            f"{registry[rule_id].name}"
+        )

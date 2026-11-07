@@ -21,10 +21,16 @@ Grade: A ≥ 90, B ≥ 80, C ≥ 70, D ≥ 60, F < 60.
 
 ## Naming
 
-### AGT001 · error · Tool name is not a valid MCP identifier
-Names must be 1–64 characters of `[A-Za-z0-9_-]`. Anything else is rejected by
-strict clients and silently mangled by lenient ones, which surfaces later as a
-"tool not found" error the model cannot recover from.
+### AGT001 · warning · Tool name is outside the characters the spec suggests
+The specification says names **SHOULD** be 1–128 characters of `[A-Za-z0-9_.-]`
+and **SHOULD NOT** contain spaces or commas. SHOULD, not MUST — so this is a
+warning, not an error.
+
+Dots are allowed: `admin.tools.list` is an example the spec itself uses. The
+first version of this rule enforced `[A-Za-z0-9_-]{1,64}` as an error and
+therefore flagged a legal name as broken. Anything outside the set is still a
+portability risk — strict clients reject it and lenient ones mangle it, which
+surfaces later as a "tool not found" the model cannot recover from.
 
 ### AGT002 · info · Tool name is not snake_case
 Mixed `readFile` / `read_file` / `ReadFile` in one manifest makes near-duplicate
@@ -191,14 +197,22 @@ exists: a single server cannot see another server, but your model sees all of
 them at once, flattened into one list.
 
 ### AGT201 · error · Same tool name exposed by two servers
-A hard collision. The client keeps one and the other becomes unreachable — no
-error, no warning, just a tool that never gets called. This is the bug that costs
-an afternoon.
+A hard collision: the names are **byte-identical**. What a given client does
+about it varies — some keep one and drop the other, some namespace them — so this
+rule reports the collision rather than promising a specific outcome.
+
+Case is compared exactly, because the spec says names SHOULD be treated as
+case-sensitive. `Read_File` and `read_file` are therefore *not* this rule; they
+fall through to AGT202.
 
 ### AGT202 · warning · Two servers expose the same name once normalised
-`read_file` and `readFiles` are different strings but the same word to a model
-reading a flat list. Flagged separately from AGT201 because the fix is different:
-rename one so the *name alone* disambiguates.
+`read_file`, `readFiles` and `Read-Files` are different strings but the same words
+to a model reading a flat list. Names are split on camelCase, PascalCase and
+punctuation boundaries, plural-stemmed, and compared as token sets.
+
+Flagged separately from AGT201 because the risk is different: the tools are
+distinct per the spec, but clients disagree about case folding and separators, so
+the same call may reach either one. Rename one so the *name alone* disambiguates.
 
 ### AGT203 · warning · Two servers expose overlapping tools
 The soft case: different names, but descriptions that overlap ≥ 65% and a shared

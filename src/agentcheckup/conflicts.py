@@ -46,6 +46,12 @@ WORD = re.compile(r"[a-z0-9]+")
 #: has no word delimiters and a real segmenter would be a dependency.
 CJK = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]+")
 
+#: Word boundary inside camelCase and PascalCase, including acronym runs:
+#: ``readFiles`` -> ``read Files``, ``parseHTML`` -> ``parse HTML``.
+#: Without this, ``readFiles`` was a single token and could never match
+#: ``read_files`` — two spellings of the same tool looked unrelated.
+CAMEL = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+
 
 @dataclass(frozen=True)
 class ToolRef:
@@ -135,7 +141,8 @@ def jaccard(a: set[str], b: set[str]) -> float:
 
 
 def name_tokens(name: str) -> set[str]:
-    latin = {_stem(w) for w in WORD.findall(name.lower()) if len(w) > 1}
+    spaced = CAMEL.sub(" ", name)
+    latin = {_stem(w) for w in WORD.findall(spaced.lower()) if len(w) > 1}
     return latin | _cjk_tokens(name)
 
 
@@ -182,96 +189,156 @@ def _same_object(a: ToolRef, b: ToolRef) -> bool:
     return bool(ta & tb)
 
 
+#: Cap on findings emitted for one group of identically-named tools. A manifest
+#: where 200 servers all expose `read_file` has one problem, not 19,900.
+MAX_PER_GROUP = 200
+
+
+def _cross_server_pairs(group: list[ToolRef]):
+    """Pairs from different servers. Same-server duplicates are AGT004's job."""
+    for a, b in combinations(group, 2):
+        if a.server != b.server:
+            yield a, b
+
+
+def _soft_candidates(refs: list[ToolRef], budget: int):
+    """Pairs that share at least one name token, rarest tokens first.
+
+    ``is_ambiguous`` requires a shared name token, so an inverted index over
+    those tokens yields exactly the pairs worth scoring. Enumerating all
+    ``combinations`` instead meant 5,000 tools produced 12.5M tuples in memory
+    before any filtering happened.
+
+    Rarest tokens are expanded first so the budget is spent on the most
+    discriminating evidence. A token carried by a very large number of tools is
+    expanded last, which is also the cheapest way to keep the work bounded.
+    """
+    postings: dict[str, list[int]] = {}
+    for index, ref in enumerate(refs):
+        for token in name_tokens(ref.tool.name):
+            postings.setdefault(token, []).append(index)
+
+    seen: set[tuple[int, int]] = set()
+    for token in sorted(postings, key=lambda t: len(postings[t])):
+        members = postings[token]
+        if len(members) < 2:
+            continue
+        for i, j in combinations(members, 2):
+            key = (i, j) if i < j else (j, i)
+            if key in seen:
+                continue
+            seen.add(key)
+            a, b = refs[key[0]], refs[key[1]]
+            if a.server == b.server:
+                continue  # same server: a naming problem, not a conflict
+            yield a, b
+            if len(seen) >= budget:
+                return
+
+
 def detect_conflicts(
     refs: list[ToolRef],
     *,
     threshold: float = 0.55,
     max_pairs: int = 60_000,
 ) -> list[Conflict]:
-    """Find tool pairs across servers that an agent cannot reliably tell apart."""
+    """Find tool pairs across servers that an agent cannot reliably tell apart.
+
+    Hard and normalised collisions are found by grouping, which is O(n) in the
+    number of tools. Only the soft-overlap phase enumerates pairs, and it works
+    from a token index under a budget — so a large manifest costs time in
+    proportion to the evidence, not to the square of the tool count.
+    """
     conflicts: list[Conflict] = []
     seen: set[tuple[str, str]] = set()
 
-    pairs = list(combinations(refs, 2))
-    if len(pairs) > max_pairs:  # pathological manifests: compare only plausible pairs
-        pairs = [
-            (a, b)
-            for a, b in pairs
-            if a.server != b.server and _same_object(a, b)
-        ]
-
-    for a, b in pairs:
-        if a.server == b.server:
-            continue  # same server: a naming problem, not a conflict problem
-
+    def emit(
+        rule: str,
+        severity: Severity,
+        a: ToolRef,
+        b: ToolRef,
+        similarity: float,
+        message: str,
+        hint: str,
+    ) -> None:
         key = tuple(sorted([a.qualified, b.qualified]))
         if key in seen:
-            continue
+            return
         seen.add(key)
-
-        name_a = a.tool.name.lower()
-        name_b = b.tool.name.lower()
-
-        # Hard collision: identical names, different servers. What the client
-        # does about it varies, so the message must not promise a specific outcome.
-        if name_a == name_b:
-            conflicts.append(
-                Conflict(
-                    rule="AGT201",
-                    severity=Severity.ERROR,
-                    a=a,
-                    b=b,
-                    similarity=1.0,
-                    message=(
-                        f"Tool name '{a.tool.name}' is exposed by both "
-                        f"'{a.server}' and '{b.server}'."
-                    ),
-                    hint=(
-                        "Two servers expose the same name and clients resolve that "
-                        "differently, so the same call can reach either one. Rename "
-                        "one, or use a gateway that prefixes."
-                    ),
-                )
+        conflicts.append(
+            Conflict(
+                rule=rule,
+                severity=severity,
+                a=a,
+                b=b,
+                similarity=similarity,
+                message=message,
+                hint=hint,
             )
-            continue
+        )
 
-        # Same name modulo punctuation/plural: `read_file` vs `readFiles`.
-        if name_tokens(a.tool.name) == name_tokens(b.tool.name):
-            conflicts.append(
-                Conflict(
-                    rule="AGT202",
-                    severity=Severity.WARNING,
-                    a=a,
-                    b=b,
-                    similarity=1.0,
-                    message=(
-                        f"Tools '{a.qualified}' and '{b.qualified}' have the same "
-                        "name once normalised."
-                    ),
-                    hint="Rename one so the model can tell them apart by name alone.",
-                )
+    # --- 1. exact collision -------------------------------------------------
+    by_name: dict[str, list[ToolRef]] = {}
+    for ref in refs:
+        by_name.setdefault(ref.tool.name, []).append(ref)
+
+    for group in by_name.values():
+        if len(group) < 2:
+            continue
+        for a, b in _cross_server_pairs(group):
+            emit(
+                "AGT201",
+                Severity.ERROR,
+                a,
+                b,
+                1.0,
+                f"Tool name '{a.tool.name}' is exposed by both "
+                f"'{a.server}' and '{b.server}'.",
+                "Two servers expose the same name and clients resolve that "
+                "differently, so the same call can reach either one. Rename "
+                "one, or use a gateway that prefixes.",
             )
-            continue
+            if len(conflicts) >= MAX_PER_GROUP:
+                break
 
+    # --- 2. normalised collision -------------------------------------------
+    # Case is compared exactly in phase 1 because the spec says names SHOULD be
+    # treated as case-sensitive; `Read_File` and `read_file` land here instead.
+    by_signature: dict[frozenset[str], list[ToolRef]] = {}
+    for ref in refs:
+        by_signature.setdefault(frozenset(name_tokens(ref.tool.name)), []).append(ref)
+
+    for group in by_signature.values():
+        if len(group) < 2:
+            continue
+        for a, b in _cross_server_pairs(group):
+            emit(
+                "AGT202",
+                Severity.WARNING,
+                a,
+                b,
+                1.0,
+                f"Tools '{a.qualified}' and '{b.qualified}' have the same "
+                "name once normalised.",
+                "Rename one so the model can tell them apart by name alone.",
+            )
+
+    # --- 3. capability overlap ---------------------------------------------
+    for a, b in _soft_candidates(refs, max_pairs):
         flagged, score = is_ambiguous(a, b, threshold=threshold)
-        if flagged:
-            conflicts.append(
-                Conflict(
-                    rule="AGT203",
-                    severity=Severity.WARNING,
-                    a=a,
-                    b=b,
-                    similarity=score,
-                    message=(
-                        f"'{a.qualified}' and '{b.qualified}' overlap "
-                        f"({score:.0%}); the model picks between them at random."
-                    ),
-                    hint=(
-                        "Add a disambiguation clause to both descriptions: "
-                        '"Use this only for X; use <other tool> for Y."'
-                    ),
-                )
-            )
+        if not flagged:
+            continue
+        emit(
+            "AGT203",
+            Severity.WARNING,
+            a,
+            b,
+            score,
+            f"'{a.qualified}' and '{b.qualified}' overlap "
+            f"({score:.0%}); the model picks between them at random.",
+            "Add a disambiguation clause to both descriptions: "
+            '"Use this only for X; use <other tool> for Y."',
+        )
 
     return sorted(conflicts, key=lambda c: (-c.severity.rank, -c.similarity))
 
