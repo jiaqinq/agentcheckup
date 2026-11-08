@@ -44,6 +44,42 @@ user's machine — run `agentcheckup` yourself for your own numbers.
 
 37 rules, zero runtime dependencies, Python 3.10+.
 
+## Who it is for
+
+People running **more than one MCP server** in Claude Desktop, Claude Code, Cursor,
+Codex CLI, VS Code, Windsurf, Zed, Continue, Cline, Roo Code or Kilo Code — and who
+have hit a moment where the agent called the wrong tool and nothing in the logs
+explained why.
+
+If you run a single server, there is nothing here for you: one server cannot
+collide with itself.
+
+## How it differs from an MCP protocol validator
+
+A protocol validator checks whether a server speaks MCP correctly. This checks
+whether the servers you *already have working* make sense together.
+
+| | agentcheckup | Protocol validator |
+|---|---|---|
+| Scope | Many servers at once | One server |
+| Question | "Can my agent tell these tools apart?" | "Does this server follow the spec?" |
+| Output | Conflicts, config risk, token cost | Conformance failures |
+
+It is not a substitute for the official conformance suite, and it does not attempt
+to be.
+
+## Documentation
+
+| | |
+|---|---|
+| [Detecting MCP tool name conflicts](docs/mcp-tool-conflict-detection.md) | What a conflict is, the four rule ids, and the normalisation rules |
+| [Auditing MCP server configuration](docs/mcp-configuration-auditing.md) | Every client it finds, the config rules, and what "audit" does not mean |
+| [Tool manifest token cost](docs/mcp-tool-manifest-token-cost.md) | How the estimate is produced, and why it is not a bill |
+| [GitHub Action reference](docs/github-action.md) | Inputs, outputs, SARIF, auto-discovery in CI |
+| [Rule reference](docs/rules.md) | All 37 rules with the reasoning behind each |
+| [FAQ](docs/faq.md) | Direct answers, including what the tool does not do |
+
+
 ## Quick start
 
 ```bash
