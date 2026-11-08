@@ -5,12 +5,25 @@ build-backend = "hatchling.build"
 [project]
 name = "agentcheckup"
 version = "0.8.1"
-description = "Diagnose your agent setup: tool conflicts, risky config, context budget."
+description = "MCP tool conflict detector and config auditor for AI agents: cross-server name collisions, risky MCP settings, and tool-manifest token overhead."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "jiaqinq" }]
-keywords = ["mcp", "model-context-protocol", "agents", "ai", "linter", "security", "cli"]
+keywords = [
+  "mcp",
+  "model-context-protocol",
+  "mcp-server",
+  "mcp-tools",
+  "mcp-linter",
+  "mcp-tool-conflicts",
+  "mcp-config-audit",
+  "ai-agents",
+  "agent-tools",
+  "github-actions",
+  "static-analysis",
+  "python-cli",
+]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
@@ -36,6 +49,8 @@ agentcheckup = "agentcheckup.cli:main"
 Homepage = "https://github.com/jiaqinq/agentcheckup"
 Issues = "https://github.com/jiaqinq/agentcheckup/issues"
 Changelog = "https://github.com/jiaqinq/agentcheckup/blob/main/CHANGELOG.md"
+"Rule reference" = "https://github.com/jiaqinq/agentcheckup/blob/main/docs/rules.md"
+"GitHub Action" = "https://github.com/jiaqinq/agentcheckup/blob/main/docs/github-action.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agentcheckup"]
