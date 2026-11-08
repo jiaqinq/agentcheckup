@@ -27,10 +27,9 @@ coverage: 2/2 server(s) inspected (100%), 0 unverified
   Grade B    Score  88/100   1 error
 
   CONFLICTS (1)
-    AGT201  Tool name 'read_file' is exposed by both 'files' and 'git'.
-            [files/read_file <-> git/read_file]
-            fix: Two servers expose the same name and clients resolve that
-                 differently, so the same call can reach either one.
+    AGT201  Tool name 'read_file' is exposed by both 'files' and 'git'.  [files/read_file <-> git/read_file]
+            fix: Two servers expose the same name and clients resolve that differently, so the same call can reach either one. Rename one, or use a gateway that prefixes.
+
 
   Rule docs: https://github.com/jiaqinq/agentcheckup#rules
 ```
@@ -99,7 +98,7 @@ agentcheckup
 exits without executing anything — credentials masked. `--no-spawn` goes further:
 it audits the configuration and never starts anything, at the cost of no tool or
 conflict findings. `agentcheckup` on its own starts the servers, because
-`tools/list` is the only way to see the tool manifest.
+`tools/list` is how a tool manifest is obtained.
 
 ## Why cross-server
 
@@ -187,7 +186,7 @@ agentcheckup rules                              # list every rule
 
 ### As a GitHub Action
 
-The fastest way to keep a manifest from regressing, and the version you pin is
+A quick way to keep a manifest from regressing, and the version you pin is
 the version you run — the action installs from its own checkout.
 
 ```yaml

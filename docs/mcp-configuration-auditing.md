@@ -45,16 +45,21 @@ agentcheckup audit --client cursor --client codex
 
 ## The config rules
 
+Seven rules read the config file itself:
+
 | Rule | Severity | What it catches |
 |---|---|---|
 | `AGT101` | warning | `npx` package without a pinned version |
 | `AGT102` | warning | `uvx` package without a pinned version |
-| `AGT103` | warning | Config wraps the server in a shell (`sh -c`, `cmd /c`) |
+| `AGT103` | warning | Config wraps the server in a shell |
 | `AGT104` | error | Filesystem server rooted at a volume root |
-| `AGT105` | info | Server did not return a tool list (unreachable, unaudited) |
 | `AGT106` | error | Permission-bypass flag (`--yolo`, `--dangerously-skip-permissions`) |
 | `AGT107` | warning | Credential stored in plaintext in the config |
 | `AGT108` | warning | Remote server over plain `http://` |
+
+The 37-rule total also counts 24 tool-definition rules and 6 suite rules. `AGT105`
+("server did not return a tool list") is one of the suite rules, but it only shows
+up during an audit — it is how a server that never answered gets recorded.
 
 ### Why `AGT104` is an error and `AGT101` is only a warning
 

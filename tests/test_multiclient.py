@@ -14,6 +14,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from agentcheckup import discovery
 from agentcheckup.conflicts import ToolRef, detect_conflicts
 from agentcheckup.models import Tool
@@ -87,31 +89,38 @@ def test_cross_client_message_names_both_clients():
 # --------------------------------------------------------------------------- #
 
 
-def make_sandbox(tmp_path: Path) -> tuple[Path, Path]:
-    """A fake home + appdata with two client configs that clash by name.
+def make_sandbox(tmp_path: Path, monkeypatch) -> Path:
+    """A fake home with two client configs that clash by name.
 
-    Cursor keeps its servers in ``~/.cursor/mcp.json``; Claude Desktop keeps them
-    in ``%APPDATA%/Claude/claude_desktop_config.json``. Both are JSON, so this
-    sandbox does not depend on ``tomllib`` being present.
+    The sandbox does **not** assume a platform layout. It asks
+    ``_platform_app_dir()`` where this platform keeps per-user app data and puts
+    the Claude config there. The first version hardcoded ``AppData/Roaming`` and
+    therefore only passed on Windows: on Linux the code looks in
+    ``~/.config``, found nothing, and the test failed.
+
+    ``_platform_app_dir`` is patched rather than ``_appdata`` because the latter
+    is only consulted on win32 — patching it left macOS and Linux reading the
+    real home directory.
     """
     home = tmp_path / "home"
-    appdata = home / "AppData" / "Roaming"
+    app_dir = tmp_path / "appdata"
     (home / ".cursor").mkdir(parents=True)
-    (appdata / "Claude").mkdir(parents=True)
+    (app_dir / "Claude").mkdir(parents=True)
+
+    monkeypatch.setattr(discovery, "HOME", home)
+    monkeypatch.setattr(discovery, "_platform_app_dir", lambda: app_dir)
 
     (home / ".cursor" / "mcp.json").write_text(
         json.dumps({"mcpServers": {"filesystem": {"command": "cursor-fs"}}}), encoding="utf-8"
     )
-    (appdata / "Claude" / "claude_desktop_config.json").write_text(
+    (app_dir / "Claude" / "claude_desktop_config.json").write_text(
         json.dumps({"mcpServers": {"filesystem": {"command": "claude-fs"}}}), encoding="utf-8"
     )
-    return home, appdata
+    return home
 
 
 def test_discovery_marks_which_client_each_server_came_from(tmp_path, monkeypatch):
-    home, appdata = make_sandbox(tmp_path)
-    monkeypatch.setattr(discovery, "HOME", home)
-    monkeypatch.setattr(discovery, "_appdata", lambda: appdata)
+    make_sandbox(tmp_path, monkeypatch)
 
     found = discovery.discover(cwd=tmp_path / "nowhere")
     labels = {label for label, _ in found}
@@ -126,3 +135,34 @@ def test_discovery_marks_which_client_each_server_came_from(tmp_path, monkeypatc
     assert clients == {"Cursor", "Claude Desktop"}, clients
     # Same name, different commands: both survive, and each knows its client.
     assert len(servers) == 2
+
+
+# --------------------------------------------------------------------------- #
+# The platform mapping itself, so the sandbox above cannot hide a wrong path
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    ("platform", "expected_parts"),
+    [
+        ("linux", (".config",)),
+        ("darwin", ("Library", "Application Support")),
+    ],
+)
+def test_platform_app_dir_per_os(monkeypatch, tmp_path, platform, expected_parts):
+    monkeypatch.setattr(discovery, "HOME", tmp_path)
+    monkeypatch.setattr(discovery.sys, "platform", platform)
+    assert discovery._platform_app_dir() == tmp_path.joinpath(*expected_parts)
+
+
+def test_platform_app_dir_uses_appdata_on_windows(monkeypatch, tmp_path):
+    monkeypatch.setattr(discovery, "HOME", tmp_path)
+    monkeypatch.setattr(discovery.sys, "platform", "win32")
+    monkeypatch.setattr(discovery, "_appdata", lambda: tmp_path / "roaming")
+    assert discovery._platform_app_dir() == tmp_path / "roaming"
+
+
+def test_appdata_falls_back_to_home(monkeypatch, tmp_path):
+    monkeypatch.setattr(discovery, "HOME", tmp_path)
+    monkeypatch.delenv("APPDATA", raising=False)
+    assert discovery._appdata() == tmp_path / "AppData" / "Roaming"
