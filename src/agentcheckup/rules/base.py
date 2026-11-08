@@ -41,6 +41,11 @@ SUITE_RULES: list[SuiteRule] = [
     SuiteRule("AGT201", Severity.ERROR, "Same tool name exposed by two servers"),
     SuiteRule("AGT202", Severity.WARNING, "Two servers expose the same name once normalised"),
     SuiteRule("AGT203", Severity.WARNING, "Two servers expose overlapping tools"),
+    SuiteRule(
+        "AGT204",
+        Severity.INFO,
+        "Same tool name in two different clients",
+    ),
 ]
 
 

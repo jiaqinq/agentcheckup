@@ -9,6 +9,40 @@ new ids, and removing a rule is a breaking change.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-08
+
+### Fixed — cross-client name clashes were reported as runtime collisions
+
+Cursor and Codex each load only their own config. When both declare a server
+called `filesystem` with different commands, the two survive deduplication (they
+are different launch specs) and then produced an **`AGT201` error** — "the client
+keeps one and the other is unreachable". Nothing ever loads both lists at once,
+so that was a false positive on the most common multi-client setup.
+
+Servers now record which client declared them, and a name clash across clients is
+reported as **`AGT204` (info)** instead:
+
+```
+AGT204  Tool name 'read_file' exists in both 'Cursor' and 'Codex CLI'.
+        Separate clients, separate configs: they are never loaded together.
+```
+
+The same applies to normalised clashes (`readFiles` vs `read_files`).
+
+When the client is unknown — a bare `--config` file, or a config found without a
+label — the strict answer (`AGT201`) is kept. Better to warn twice than to
+downgrade a real collision because a label was missing.
+
+This is worth acting on only if you run a proxy that merges several clients into
+one tool list; then the collision is real and `AGT204` is your warning that it
+exists.
+
+### Added
+
+- `AGT204`, and a `client` field on `ServerConfig` / `ToolRef`.
+- A sandboxed multi-client test: a temporary home and appdata, two client
+  configs, no real config read or written.
+
 ## [0.7.0] - 2026-11-08
 
 ### Added

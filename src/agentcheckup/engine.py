@@ -135,10 +135,15 @@ def lint_audit(
     partial = partial or {}
     findings = _server_findings(servers)
 
+    client_of = {server.key: server.client for server in servers}
+
     refs: list[ToolRef] = []
     for server_name, tools in tools_by_server.items():
         findings.extend(_tool_findings(tools))
-        refs.extend(ToolRef(server=server_name, tool=tool) for tool in tools)
+        client = client_of.get(server_name, "")
+        refs.extend(
+            ToolRef(server=server_name, tool=tool, client=client) for tool in tools
+        )
 
     findings.extend(lint_conflicts(refs))
 

@@ -95,7 +95,11 @@ def servers_from_config(path: str | Path) -> list[ServerConfig]:
     for key, block in blocks:
         for name, entry in block.items():
             if isinstance(entry, dict):
-                servers.append(ServerConfig.from_raw(name, entry, source=f"{file}:{key}"))
+                servers.append(
+                    ServerConfig.from_raw(
+                        name, entry, source=f"{file}:{key}", client="explicit"
+                    )
+                )
     return servers
 
 

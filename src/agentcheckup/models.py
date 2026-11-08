@@ -119,13 +119,23 @@ class ServerConfig:
     #: called `filesystem`; they are different instances and must not share a
     #: slot in `tools_by_server`, or one silently overwrites the other.
     instance: str | None = None
+    #: Which client this server was declared in (Cursor, Codex CLI, ...). Two
+    #: clients never load each other's config, so a name clash between them is
+    #: not a runtime collision.
+    client: str = ""
 
     @property
     def key(self) -> str:
         return self.instance or self.name
 
     @classmethod
-    def from_raw(cls, name: str, data: dict[str, Any], source: str | None = None) -> ServerConfig:
+    def from_raw(
+        cls,
+        name: str,
+        data: dict[str, Any],
+        source: str | None = None,
+        client: str = "",
+    ) -> ServerConfig:
         args = data.get("args") or []
         if not isinstance(args, list):
             args = [str(args)]
@@ -139,6 +149,7 @@ class ServerConfig:
             env={str(k): str(v) for k, v in env.items()},
             url=data.get("url") or data.get("serverUrl"),
             source=source,
+            client=client,
         )
 
 

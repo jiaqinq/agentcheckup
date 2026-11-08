@@ -214,6 +214,17 @@ Flagged separately from AGT201 because the risk is different: the tools are
 distinct per the spec, but clients disagree about case folding and separators, so
 the same call may reach either one. Rename one so the *name alone* disambiguates.
 
+### AGT204 · info · Same tool name in two different clients
+`filesystem` in Cursor and `filesystem` in Codex are the same name in two configs
+that are never loaded together. That is not an unreachable duplicate, so it is
+reported as information rather than as `AGT201`.
+
+It matters only if you run a proxy that merges several clients into one tool list
+— in that case the collision is real and this is your warning that it exists.
+
+When the client is unknown, the strict answer (`AGT201`) is used instead: better
+to warn twice than to downgrade a real collision.
+
 ### AGT203 · warning · Two servers expose overlapping tools
 The soft case: different names, but descriptions that overlap ≥ 65% and a shared
 head noun. Selection becomes a coin flip that presents as model flakiness.

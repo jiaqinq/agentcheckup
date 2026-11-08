@@ -83,7 +83,7 @@ def test_emitted_severity_matches_the_registry(rule):
 # --------------------------------------------------------------------------- #
 
 
-def _conflict_ref(server: str, name: str, description: str):
+def _conflict_ref(server: str, name: str, description: str, client: str = ""):
     from agentcheckup.conflicts import ToolRef
     from agentcheckup.models import Tool
 
@@ -94,7 +94,7 @@ def _conflict_ref(server: str, name: str, description: str):
             "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
         }
     )
-    return ToolRef(server=server, tool=tool)
+    return ToolRef(server=server, tool=tool, client=client)
 
 
 def test_conflict_rules_emit_their_registered_severity():
@@ -122,6 +122,10 @@ def test_conflict_rules_emit_their_registered_severity():
                 "search_private",
                 "Search private repositories by keyword and return matching repository names.",
             ),
+        ),
+        "AGT204": (
+            _conflict_ref("a", "read_file", "Read a file.", client="Cursor"),
+            _conflict_ref("b", "read_file", "Read a file from git.", client="Codex CLI"),
         ),
     }
 

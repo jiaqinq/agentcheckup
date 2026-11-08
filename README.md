@@ -121,7 +121,7 @@ The fastest way to keep a manifest from regressing, and the version you pin is
 the version you run — the action installs from its own checkout.
 
 ```yaml
-- uses: jiaqinq/agentcheckup@v0.7.0
+- uses: jiaqinq/agentcheckup@v0.8.0
   with:
     config: .mcp.json
     fail-on: warning
@@ -176,6 +176,21 @@ what keeps `search_repositories` and `search_documents` apart — without it the
 false-positive rate made the report untrustworthy, which is worse than no report.
 
 It is a heuristic, and the docs say so. `AGT203` is a warning, not a verdict.
+
+## One client's `filesystem` is not another's
+
+Cursor and Codex each load only their own config. Two servers with the same name
+in different clients are not an unreachable duplicate — nothing ever loads both
+lists at once — so that case is reported as information, not as an error:
+
+```
+AGT204  Tool name 'read_file' exists in both 'Cursor' and 'Codex CLI'.
+        Separate clients, separate configs: they are never loaded together.
+```
+
+Within one client the same name is still `AGT201` (error). When the client is
+unknown the strict answer wins: better to warn twice than to downgrade a real
+collision because a label was missing.
 
 ## Adopting it on an existing project
 

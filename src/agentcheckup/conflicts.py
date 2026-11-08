@@ -59,6 +59,9 @@ class ToolRef:
 
     server: str
     tool: Tool
+    #: Which client declared the server. Two clients never load each other's
+    #: config, so a name clash across them is not a runtime collision.
+    client: str = ""
 
     @property
     def qualified(self) -> str:
@@ -194,6 +197,28 @@ def _same_object(a: ToolRef, b: ToolRef) -> bool:
 MAX_PER_GROUP = 200
 
 
+def _different_clients(a: ToolRef, b: ToolRef) -> bool:
+    """True when the two servers were declared in different clients.
+
+    Each client loads only its own config, so the same name in Cursor and in
+    Codex is not an unreachable duplicate — nothing ever loads both lists at
+    once. Reporting it as a hard collision is a false positive, and false
+    positives are what make people stop reading the report.
+    """
+    return bool(a.client) and bool(b.client) and a.client != b.client
+
+
+def _different_clients(a: ToolRef, b: ToolRef) -> bool:
+    """True when the two servers were declared in different clients.
+
+    Each client loads only its own config, so the same name in Cursor and in
+    Codex is not an unreachable duplicate — nothing ever loads both lists at
+    once. Reporting it as a hard collision is a false positive, and false
+    positives are what make people stop reading the report.
+    """
+    return bool(a.client) and bool(b.client) and a.client != b.client
+
+
 def _cross_server_pairs(group: list[ToolRef]):
     """Pairs from different servers. Same-server duplicates are AGT004's job."""
     for a, b in combinations(group, 2):
@@ -286,6 +311,19 @@ def detect_conflicts(
         if len(group) < 2:
             continue
         for a, b in _cross_server_pairs(group):
+            if _different_clients(a, b):
+                emit(
+                    "AGT204",
+                    Severity.INFO,
+                    a,
+                    b,
+                    1.0,
+                    f"Tool name '{a.tool.name}' exists in both '{a.client}' and "
+                    f"'{b.client}'. Separate clients, separate configs: they are "
+                    f"never loaded together.",
+                    "Only worth acting on if you use a proxy that merges clients.",
+                )
+                continue
             emit(
                 "AGT201",
                 Severity.ERROR,
@@ -312,6 +350,18 @@ def detect_conflicts(
         if len(group) < 2:
             continue
         for a, b in _cross_server_pairs(group):
+            if _different_clients(a, b):
+                emit(
+                    "AGT204",
+                    Severity.INFO,
+                    a,
+                    b,
+                    1.0,
+                    f"Tools '{a.qualified}' and '{b.qualified}' normalise to the "
+                    f"same name, but they live in '{a.client}' and '{b.client}'.",
+                    "Separate clients never load each other's config.",
+                )
+                continue
             emit(
                 "AGT202",
                 Severity.WARNING,

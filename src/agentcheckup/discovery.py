@@ -115,17 +115,17 @@ def discover(cwd: Path | None = None) -> list[tuple[str, Path]]:
     return found
 
 
-def _servers_from_block(block: object, source: str) -> list[ServerConfig]:
+def _servers_from_block(block: object, source: str, client: str = "") -> list[ServerConfig]:
     if not isinstance(block, dict):
         return []
     return [
-        ServerConfig.from_raw(name, entry, source=source)
+        ServerConfig.from_raw(name, entry, source=source, client=client)
         for name, entry in block.items()
         if isinstance(entry, dict)
     ]
 
 
-def _servers_from_payload(payload: dict, tag: str) -> list[ServerConfig]:
+def _servers_from_payload(payload: dict, tag: str, client: str = "") -> list[ServerConfig]:
     """Pull every server map out of one config document.
 
     Three shapes exist in the wild and all three are load-bearing:
@@ -137,12 +137,12 @@ def _servers_from_payload(payload: dict, tag: str) -> list[ServerConfig]:
     servers: list[ServerConfig] = []
 
     for key in SERVER_BLOCKS:
-        servers.extend(_servers_from_block(payload.get(key), tag))
+        servers.extend(_servers_from_block(payload.get(key), tag, client))
 
     mcp = payload.get("mcp")
     if isinstance(mcp, dict):
         for key in ("servers", "mcpServers"):
-            servers.extend(_servers_from_block(mcp.get(key), f"{tag} [mcp]"))
+            servers.extend(_servers_from_block(mcp.get(key), f"{tag} [mcp]", client))
 
     projects = payload.get("projects")
     if isinstance(projects, dict):
@@ -150,7 +150,7 @@ def _servers_from_payload(payload: dict, tag: str) -> list[ServerConfig]:
             if not isinstance(project, dict):
                 continue
             nested = _servers_from_block(
-                project.get("mcpServers"), f"{tag} :: {project_path}"
+                project.get("mcpServers"), f"{tag} :: {project_path}", client
             )
             # Prefix so two projects exposing the same server name stay distinct.
             for server in nested:
@@ -167,7 +167,7 @@ def _load_json(path: Path, label: str) -> list[ServerConfig]:
         return []
     if not isinstance(payload, dict):
         return []
-    return _servers_from_payload(payload, f"{label} ({path})")
+    return _servers_from_payload(payload, f"{label} ({path})", client=label)
 
 
 #: TOML files that could not be read, with the reason. A config we skipped must
