@@ -192,6 +192,21 @@ Within one client the same name is still `AGT201` (error). When the client is
 unknown the strict answer wins: better to warn twice than to downgrade a real
 collision because a label was missing.
 
+## One client's `filesystem` is not another's
+
+Cursor and Codex each load only their own config. Two servers with the same name
+in different clients are not an unreachable duplicate — nothing ever loads both
+lists at once — so that case is reported as information, not as an error:
+
+```
+AGT204  Tool name 'read_file' exists in both 'Cursor' and 'Codex CLI'.
+        Separate clients, separate configs: they are never loaded together.
+```
+
+Within one client the same name is still `AGT201` (error). When the client is
+unknown the strict answer wins: better to warn twice than to downgrade a real
+collision because a label was missing.
+
 ## Adopting it on an existing project
 
 The first run on a real repository finds things that were there before you
