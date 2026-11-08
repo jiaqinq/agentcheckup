@@ -123,6 +123,13 @@ class ServerConfig:
     #: clients never load each other's config, so a name clash between them is
     #: not a runtime collision.
     client: str = ""
+    #: Codex's ``env_vars``: names to inherit from the parent environment. The
+    #: values are never stored or printed here — only the names, which are not
+    #: secrets by themselves.
+    env_passthrough: list[str] = field(default_factory=list)
+    #: Codex's ``startup_timeout_sec``. Used as this server's deadline when the
+    #: caller did not pass an explicit --timeout.
+    startup_timeout: float | None = None
 
     @property
     def key(self) -> str:
@@ -142,6 +149,12 @@ class ServerConfig:
         env = data.get("env") or {}
         if not isinstance(env, dict):
             env = {}
+        env_vars = data.get("env_vars") or []
+        if not isinstance(env_vars, list):
+            env_vars = []
+        startup = data.get("startup_timeout_sec")
+        if not isinstance(startup, (int, float)) or startup <= 0:
+            startup = None
         return cls(
             name=name,
             command=data.get("command"),
@@ -150,6 +163,8 @@ class ServerConfig:
             url=data.get("url") or data.get("serverUrl"),
             source=source,
             client=client,
+            env_passthrough=[str(name) for name in env_vars if str(name).strip()],
+            startup_timeout=float(startup) if startup else None,
         )
 
 

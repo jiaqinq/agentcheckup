@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -86,8 +87,11 @@ def _build_parser() -> argparse.ArgumentParser:
     audit.add_argument(
         "--timeout",
         type=float,
-        default=25.0,
-        help="Seconds to wait for each server's tools/list (default: 25).",
+        default=None,
+        help=(
+            "Seconds to wait for each server's tools/list. Default: the server's "
+            "own startup_timeout_sec if its config sets one, else 25."
+        ),
     )
     audit.add_argument(
         "--no-spawn",
@@ -153,6 +157,58 @@ def _emit(report: Report, args: argparse.Namespace) -> None:
         print(render_sarif(report))
     else:
         print(render_text(report, verbose=args.verbose))
+
+
+DEFAULT_TIMEOUT = 25.0
+
+
+def _child_env(server: ServerConfig) -> dict[str, str] | None:
+    """Resolve Codex's ``env_vars`` allowlist against the current environment.
+
+    ``env_vars`` is a list of *names* to inherit; the values live in the parent
+    process. They are read at spawn time, passed to the child, and never stored,
+    logged or rendered — the report only ever shows names.
+    """
+    resolved: dict[str, str] = {}
+    for name in server.env_passthrough:
+        value = os.environ.get(name)
+        if value is not None:
+            resolved[name] = value
+    resolved.update(server.env)  # an explicit env entry wins over passthrough
+    return resolved or None
+
+
+def _server_timeout(args: argparse.Namespace, server: ServerConfig) -> float:
+    """--timeout if given, else the server's own startup_timeout_sec, else 25."""
+    if args.timeout is not None:
+        return args.timeout
+    return server.startup_timeout or DEFAULT_TIMEOUT
+
+
+DEFAULT_TIMEOUT = 25.0
+
+
+def _child_env(server: ServerConfig) -> dict[str, str] | None:
+    """Resolve Codex's ``env_vars`` allowlist against the current environment.
+
+    ``env_vars`` is a list of *names* to inherit; the values live in the parent
+    process. They are read at spawn time, passed to the child, and never stored,
+    logged or rendered — the report only ever shows names.
+    """
+    resolved: dict[str, str] = {}
+    for name in server.env_passthrough:
+        value = os.environ.get(name)
+        if value is not None:
+            resolved[name] = value
+    resolved.update(server.env)  # an explicit env entry wins over passthrough
+    return resolved or None
+
+
+def _server_timeout(args: argparse.Namespace, server: ServerConfig) -> float:
+    """--timeout if given, else the server's own startup_timeout_sec, else 25."""
+    if args.timeout is not None:
+        return args.timeout
+    return server.startup_timeout or DEFAULT_TIMEOUT
 
 
 def _apply_baseline(report: Report, args: argparse.Namespace) -> Report | None:
@@ -410,7 +466,9 @@ def _run_audit(args: argparse.Namespace) -> int:
                 continue
             argv = [server.command, *server.args]
             try:
-                with StdioSession(argv, timeout=args.timeout, env=server.env) as session:
+                with StdioSession(
+                    argv, timeout=_server_timeout(args, server), env=_child_env(server)
+                ) as session:
                     tools_by_server[server.key] = session.list_tools()
                     if session.partial_reason:
                         partial[server.key] = session.partial_reason

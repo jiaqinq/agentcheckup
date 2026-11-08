@@ -29,3 +29,6 @@ Thumbs.db
 # --- Local scratch ---
 *.local.json
 scratch/
+
+# Local sandbox: copies of real client configs for experiments. Never commit.
+sandbox/

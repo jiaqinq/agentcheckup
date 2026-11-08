@@ -9,6 +9,37 @@ new ids, and removing a rule is a breaking change.
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-08
+
+### Fixed — Codex servers were starting without their environment
+
+Codex CLI declares two things this loader did not understand, both found by
+copying a real `~/.codex/config.toml` into the repository (read-only on the
+original; the copy was deleted after inspection and is gitignored).
+
+- **`env_vars`** is a list of environment variable **names** to inherit from the
+  parent process — not a table of values, and disjoint from `env`. Ignoring it
+  meant a server that expects its API key from the environment started without
+  it, then failed for a reason the report could not explain.
+
+  Names are resolved at spawn time and never stored, logged or rendered: the dry
+  run prints `--api-key <redacted>` and the report only ever shows names.
+
+- **`startup_timeout_sec`** is a per-server deadline the client itself respects.
+  It is now the default for that server when `--timeout` is not given, instead of
+  every server sharing one global 25s.
+
+### Fixed
+
+- The TOML path did not record which client a server came from, so Codex servers
+  were treated as client-unknown and got the strict `AGT201` treatment instead of
+  `AGT204`.
+
+### Added
+
+- `tests/fixtures/codex_config.toml`: the real config *structure* with fake
+  values, plus 16 tests. No real path, key or token is stored in the repository.
+
 ## [0.8.0] - 2026-11-08
 
 ### Fixed — cross-client name clashes were reported as runtime collisions

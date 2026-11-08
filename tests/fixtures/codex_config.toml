@@ -1,0 +1,28 @@
+# Structure copied from a real Codex CLI config; every value is fake.
+#
+# What the real file taught us, and this fixture pins:
+#   - servers live under [mcp_servers.<name>]
+#   - `env` is a table of literal values
+#   - `env_vars` is a *list of names* to inherit from the parent environment,
+#     not a table of values, and it does not overlap with `env`
+#   - `startup_timeout_sec` is per-server
+#
+# No real path, key or token appears here.
+
+model = "gpt-5"
+
+[mcp_servers.files]
+command = "files-mcp"
+args = ["--root", "/tmp"]
+startup_timeout_sec = 90
+env_vars = ["FILES_API_KEY", "FILES_REGION"]
+
+[mcp_servers.files.env]
+FILES_MODE = "readonly"
+
+[mcp_servers.slow]
+command = "slow-mcp"
+env_vars = ["DEFINITELY_NOT_SET_IN_PARENT"]
+
+[mcp_servers.plain]
+command = "plain-mcp"

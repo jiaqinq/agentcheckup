@@ -121,7 +121,7 @@ The fastest way to keep a manifest from regressing, and the version you pin is
 the version you run — the action installs from its own checkout.
 
 ```yaml
-- uses: jiaqinq/agentcheckup@v0.8.0
+- uses: jiaqinq/agentcheckup@v0.8.1
   with:
     config: .mcp.json
     fail-on: warning
@@ -354,6 +354,9 @@ rule. A report nobody can read is a report nobody acts on.
   thresholds keep working across releases.
 - **Every finding has a fix.** A rule that only says "this is bad" trains people
   to ignore the output.
+- **Codex configs are read the way Codex reads them.** `env_vars` names are
+  resolved against your environment at spawn time and never stored or printed;
+  `startup_timeout_sec` becomes that server's deadline.
 - **Degrade, don't die.** A server that will not start is one finding, not an
   aborted run.
 - **No network calls of its own.** No telemetry, no API, no upload; your config

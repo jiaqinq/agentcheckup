@@ -210,7 +210,9 @@ def _load_toml(path: Path, label: str) -> list[ServerConfig]:
     if isinstance(block, dict):
         for name, entry in block.items():
             if isinstance(entry, dict):
-                servers.append(ServerConfig.from_raw(name, entry, source=tag))
+                servers.append(
+                    ServerConfig.from_raw(name, entry, source=tag, client=label)
+                )
     return servers
 
 
