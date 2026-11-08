@@ -4,6 +4,11 @@
 the MCP configs you already have, starts the servers they declare, and tells you
 where two of them collide — before your agent picks the wrong tool.
 
+> **Not the npm package.** There is an unrelated `agentcheckup` on npm — Node.js,
+> different author, different job (it inspects what each coding agent loads from a
+> repository). This project is the **Python** package on PyPI:
+> `pip install agentcheckup`. Running `npx agentcheckup` gets you the other one.
+
 [![CI](https://github.com/jiaqinq/agentcheckup/actions/workflows/ci.yml/badge.svg)](https://github.com/jiaqinq/agentcheckup/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/agentcheckup.svg)](https://pypi.org/project/agentcheckup/)
 [![Python](https://img.shields.io/pypi/pyversions/agentcheckup.svg)](https://pypi.org/project/agentcheckup/)

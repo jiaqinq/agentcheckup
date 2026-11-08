@@ -16,6 +16,34 @@ Protocol) configurations for AI agents. It does three things:
 
 Zero runtime dependencies. Python 3.10+.
 
+## Is this the same as the `agentcheckup` npm package?
+
+No. They are different projects by different authors:
+
+| | this project | the npm one |
+|---|---|---|
+| Install | `pip install agentcheckup` | `npx agentcheckup` |
+| Language | Python 3.10+ | Node.js 22.12+ |
+| Job | Cross-server tool conflicts, config risk, manifest cost | What each coding agent loads from a repository |
+| Source | [jiaqinq/agentcheckup](https://github.com/jiaqinq/agentcheckup) | a different repository |
+
+The npm package was published first; the name was not available there. If a search
+result sent you to the wrong one, that is why.
+
+## Is this the same as the `agentcheckup` npm package?
+
+No. They are different projects by different authors:
+
+| | this project | the npm one |
+|---|---|---|
+| Install | `pip install agentcheckup` | `npx agentcheckup` |
+| Language | Python 3.10+ | Node.js 22.12+ |
+| Job | Cross-server tool conflicts, config risk, manifest cost | What each coding agent loads from a repository |
+| Source | [jiaqinq/agentcheckup](https://github.com/jiaqinq/agentcheckup) | a different repository |
+
+The npm package was published first; the name was not available there. If a search
+result sent you to the wrong one, that is why.
+
 ## Who is it for?
 
 People running more than one MCP server in Claude Desktop, Claude Code, Cursor,
