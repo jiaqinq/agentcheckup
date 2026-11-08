@@ -1,71 +1,138 @@
 # agentcheckup
 
-> Diagnose your agent setup before your agent does.
+**MCP tool conflict detector and config auditor for AI agents.** One command reads
+the MCP configs you already have, starts the servers they declare, and tells you
+where two of them collide — before your agent picks the wrong tool.
+
+> **Not the npm package.** There is an unrelated `agentcheckup` on npm — Node.js,
+> different author, different job (it inspects what each coding agent loads from a
+> repository). This project is the **Python** package on PyPI:
+> `pip install agentcheckup`. Running `npx agentcheckup` gets you the other one.
 
 [![CI](https://github.com/jiaqinq/agentcheckup/actions/workflows/ci.yml/badge.svg)](https://github.com/jiaqinq/agentcheckup/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/agentcheckup.svg)](https://pypi.org/project/agentcheckup/)
 [![Python](https://img.shields.io/pypi/pyversions/agentcheckup.svg)](https://pypi.org/project/agentcheckup/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Every other MCP tool looks at **one server**. None of them look at what happens
-when you load five.
-
-```console
-$ agentcheckup
-
-agentcheckup 0.4.0  |  3 server(s)  |  4 tool(s)  |  ~442 tokens per request
-
-  Grade C    Score  79/100   1 error  2 warning  1 info
-
-  CONFLICTS (1)
-    AGT201  Tool name 'read_file' is exposed by both 'files' and 'git'.
-            [files/read_file <-> git/read_file]
-            fix: Hard collision: the client keeps one and the other is
-                 unreachable. Rename one, or use a gateway that prefixes.
-
-  RISKS (2)
-    AGT101  Server 'github' runs unpinned npx package
-            '@modelcontextprotocol/server-github'.
-    AGT107  Server 'github' stores credential(s) inline:
-            GITHUB_PERSONAL_ACCESS_TOKEN.
-
-  NUDGES (1 across 1 rule(s), no score impact)
-    AGT105  Server did not return a tool list  (1)
-            github
+```bash
+pip install agentcheckup
+agentcheckup
 ```
 
-## The problem nobody is testing for
+```console
+agentcheckup 0.8.1  |  2 server(s)  |  4 tool(s)  |  ~442 tokens per request
+source: 1 config(s)
+coverage: 2/2 server(s) inspected (100%), 0 unverified
 
-Two servers cannot see each other. Your model can. It gets a flat list of 47
-tools from five servers and picks by description similarity — with no way to know
-that `files.read_file` and `git.read_file` are different things.
+  Grade B    Score  88/100   1 error
 
-Three failure modes follow, and no existing tool catches them:
+  CONFLICTS (1)
+    AGT201  Tool name 'read_file' is exposed by both 'files' and 'git'.  [files/read_file <-> git/read_file]
+            fix: Two servers expose the same name and clients resolve that differently, so the same call can reach either one. Rename one, or use a gateway that prefixes.
 
-**1. Hard collision.** Two servers expose the same tool name. The client keeps
-one, the other is silently unreachable. You spend an afternoon debugging "why
-won't it read the file" when the answer is "it's calling the other one".
 
-**2. Soft collision.** `github.search` and `docs.search` with 70% overlapping
-descriptions. Selection becomes a coin flip that looks exactly like model
-flakiness. It isn't — it's your manifest.
+  Rule docs: https://github.com/jiaqinq/agentcheckup#rules
+```
 
-**3. Context tax.** An agent pays for the full tool manifest on **every** request.
-47 tools with 200-character descriptions is thousands of tokens before the user
-says anything. Nobody budgets for it because nobody measures it.
+That output is from two mock servers committed under `tests/fixtures/`, not from a
+user's machine — run `agentcheckup` yourself for your own numbers.
 
-`agentcheckup` measures all three, in one command, from the configs you already
-have.
+## What it does
+
+| | |
+|---|---|
+| **Cross-server conflicts** | The same tool name in two servers (`AGT201`), the same name once normalised (`AGT202`), overlapping descriptions (`AGT203`), and the same name in two *different clients* (`AGT204`, informational). |
+| **MCP config risks** | Unpinned `npx`/`uvx` packages, plaintext credentials, filesystem servers rooted at a volume root, shell wrapping, permission-bypass flags, prompt injection hidden in tool descriptions. |
+| **Tool-manifest overhead** | A rough token cost for the manifest your agent re-sends on every request. An estimate from the schemas, not a billed figure. |
+| **CI integration** | `--format sarif`, `--fail-on`, `--min-score`, `--baseline`, and a GitHub Action. |
+
+37 rules, zero runtime dependencies, Python 3.10+.
+
+## Who it is for
+
+People running **more than one MCP server** in Claude Desktop, Claude Code, Cursor,
+Codex CLI, VS Code, Windsurf, Zed, Continue, Cline, Roo Code or Kilo Code — and who
+have hit a moment where the agent called the wrong tool and nothing in the logs
+explained why.
+
+If you run a single server, there is nothing here for you: one server cannot
+collide with itself.
+
+## How it differs from an MCP protocol validator
+
+A protocol validator checks whether a server speaks MCP correctly. This checks
+whether the servers you *already have working* make sense together.
+
+| | agentcheckup | Protocol validator |
+|---|---|---|
+| Scope | Many servers at once | One server |
+| Question | "Can my agent tell these tools apart?" | "Does this server follow the spec?" |
+| Output | Conflicts, config risk, token cost | Conformance failures |
+
+It is not a substitute for the official conformance suite, and it does not attempt
+to be.
+
+## Documentation
+
+| | |
+|---|---|
+| [Detecting MCP tool name conflicts](docs/mcp-tool-conflict-detection.md) | What a conflict is, the four rule ids, and the normalisation rules |
+| [Auditing MCP server configuration](docs/mcp-configuration-auditing.md) | Every client it finds, the config rules, and what "audit" does not mean |
+| [Tool manifest token cost](docs/mcp-tool-manifest-token-cost.md) | How the estimate is produced, and why it is not a bill |
+| [GitHub Action reference](docs/github-action.md) | Inputs, outputs, SARIF, auto-discovery in CI |
+| [Rule reference](docs/rules.md) | All 37 rules with the reasoning behind each |
+| [FAQ](docs/faq.md) | Direct answers, including what the tool does not do |
+
+
+## Quick start
+
+```bash
+# See what would run, and change nothing
+agentcheckup audit --dry-run
+
+# Full audit: reads configs, starts servers, reports conflicts
+agentcheckup
+```
+
+`--dry-run` prints the command line for every server that *would* be started and
+exits without executing anything — credentials masked. `--no-spawn` goes further:
+it audits the configuration and never starts anything, at the cost of no tool or
+conflict findings. `agentcheckup` on its own starts the servers, because
+`tools/list` is how a tool manifest is obtained.
+
+## Why cross-server
+
+Two servers cannot see each other. Your model can: it receives one flat list with
+every tool from every server, and has no way to know that `files.read_file` and
+`git.read_file` are different things.
+
+Three failure modes follow. Most scanners I looked at examine one server at a
+time, so none of them see any of these:
+
+**1. Hard collision.** Two servers expose the same tool name. What a client does
+about that varies — some keep one and drop the other, some namespace them — but
+the outcome is decided by your config rather than by you. If one disappears, you
+get to debug "why won't it read the file" while the agent is calling the other.
+
+**2. Soft collision.** Two tools with different names and near-identical
+descriptions. The model has to choose from text alone, so the choice is not
+predictable from your config. That looks like model flakiness and is not.
+
+**3. Context tax.** An agent re-sends the full tool manifest on **every** request.
+A handful of servers with long descriptions is thousands of tokens before the user
+says anything. It is rarely budgeted for because it is rarely measured.
+
+`agentcheckup` looks at all three at once, from the configs you already have.
 
 ## What it checks
 
 | Layer | Question it answers | Rules |
 |---|---|---|
-| **Conflicts** | Will my agent pick the wrong tool? | AGT201–AGT203 |
-| **Risks** | Is my setup unsafe? | AGT001–AGT107 |
+| **Conflicts** | Could my agent pick the wrong tool? | AGT201–AGT204 |
+| **Risks** | Is my setup unsafe? | AGT001–AGT108 |
 | **Budget** | What does my manifest cost per request? | reported on every run |
 
-36 rules in total. Full reference: [docs/rules.md](docs/rules.md).
+37 rules in total. Full reference: [docs/rules.md](docs/rules.md).
 
 ## Install
 
@@ -75,8 +142,10 @@ pip install agentcheckup
 uvx agentcheckup
 ```
 
-Python 3.10+. **Zero runtime dependencies** — no SDK, no tokenizer, no embeddings,
-no network calls. It reads JSON, starts processes, prints text.
+Python 3.10+. **Zero runtime dependencies** — no SDK, no tokenizer, no embeddings.
+It reads JSON, starts processes, prints text, and makes no network calls of its
+own. It does start the servers your config declares; those can do whatever they
+were written to do, which is why `--dry-run` and `--no-spawn` exist.
 
 ## Usage
 
@@ -117,7 +186,7 @@ agentcheckup rules                              # list every rule
 
 ### As a GitHub Action
 
-The fastest way to keep a manifest from regressing, and the version you pin is
+A quick way to keep a manifest from regressing, and the version you pin is
 the version you run — the action installs from its own checkout.
 
 ```yaml
@@ -176,21 +245,6 @@ what keeps `search_repositories` and `search_documents` apart — without it the
 false-positive rate made the report untrustworthy, which is worse than no report.
 
 It is a heuristic, and the docs say so. `AGT203` is a warning, not a verdict.
-
-## One client's `filesystem` is not another's
-
-Cursor and Codex each load only their own config. Two servers with the same name
-in different clients are not an unreachable duplicate — nothing ever loads both
-lists at once — so that case is reported as information, not as an error:
-
-```
-AGT204  Tool name 'read_file' exists in both 'Cursor' and 'Codex CLI'.
-        Separate clients, separate configs: they are never loaded together.
-```
-
-Within one client the same name is still `AGT201` (error). When the client is
-unknown the strict answer wins: better to warn twice than to downgrade a real
-collision because a label was missing.
 
 ## One client's `filesystem` is not another's
 
