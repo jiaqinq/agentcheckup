@@ -27,11 +27,12 @@ arbitrary machines.
 
 ```
 CJK characters         1 token each
-everything else        round(characters / 4)
+everything else        max(1, round(characters / 4))
 ```
 
-The manifest is serialised as compact JSON and the rule is applied to the result.
-JSON punctuation is denser than prose, so this runs slightly conservative.
+The `max(1, ...)` keeps a string of one or two non-CJK characters from rounding to
+zero. The manifest is serialised as compact JSON and the rule is applied to the
+result. JSON punctuation is denser than prose, so this runs slightly conservative.
 
 ## What the number is not
 
