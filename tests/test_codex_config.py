@@ -8,6 +8,11 @@ Three things the real file had that the loader did not understand:
 - ``startup_timeout_sec``: a per-server deadline the client itself respects.
 - ``env``: already supported, and still wins over passthrough.
 
+Most tests here drive ``ServerConfig.from_raw`` with the same structure as a
+dict, so the parsing logic is covered on Python 3.10 too. The TOML *reader*
+needs ``tomllib`` (stdlib from 3.11) and is gated to match — the 3.10 behaviour,
+which is to skip the file and say so, is covered in test_identity.py.
+
 The fixture is the real *structure* with fake values; no real path, key or token
 is stored in the repository.
 """
@@ -15,6 +20,8 @@ is stored in the repository.
 from __future__ import annotations
 
 import argparse
+import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -24,10 +31,31 @@ from agentcheckup.models import ServerConfig
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "codex_config.toml"
 
+#: Same shape as the TOML fixture, as plain data. Keeps these tests independent
+#: of whether tomllib exists.
+RAW: dict[str, dict] = {
+    "files": {
+        "command": "files-mcp",
+        "args": ["--root", "/tmp"],
+        "startup_timeout_sec": 90,
+        "env_vars": ["FILES_API_KEY", "FILES_REGION"],
+        "env": {"FILES_MODE": "readonly"},
+    },
+    "slow": {"command": "slow-mcp", "env_vars": ["DEFINITELY_NOT_SET_IN_PARENT"]},
+    "plain": {"command": "plain-mcp"},
+}
+
+needs_toml = pytest.mark.skipif(
+    sys.version_info < (3, 11),
+    reason="tomllib is stdlib from 3.11; on 3.10 the reader reports the skip instead",
+)
+
 
 def load() -> dict[str, ServerConfig]:
-    servers = cli.load_servers(FIXTURE, "Codex CLI")
-    return {server.name: server for server in servers}
+    return {
+        name: ServerConfig.from_raw(name, data, source="test", client="Codex CLI")
+        for name, data in RAW.items()
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -59,6 +87,14 @@ def test_env_vars_absent_is_an_empty_list():
 
 def test_client_label_is_recorded():
     assert {server.client for server in load().values()} == {"Codex CLI"}
+
+
+@needs_toml
+def test_toml_fixture_parses_and_records_client():
+    """End to end through the TOML reader, which needs tomllib."""
+    servers = cli.load_servers(FIXTURE, "Codex CLI")
+    assert {server.name for server in servers} == {"files", "slow", "plain"}
+    assert {server.client for server in servers} == {"Codex CLI"}
 
 
 # --------------------------------------------------------------------------- #
@@ -119,11 +155,17 @@ def test_default_applies_when_neither_is_set():
 
 
 def test_passthrough_values_do_not_appear_in_the_dry_run(tmp_path, capsys, monkeypatch):
-    """The dry run prints names, never values."""
+    """The dry run prints names, never values.
+
+    Uses a JSON config rather than the TOML fixture so the check also runs on
+    Python 3.10, where the TOML reader is deliberately unavailable.
+    """
     monkeypatch.setenv("FILES_API_KEY", "sk-should-never-be-printed-000000")
+    cfg = tmp_path / "codex.json"
+    cfg.write_text(json.dumps({"mcpServers": RAW}), encoding="utf-8")
 
     code = cli.main(
-        ["audit", "--no-discover", "--config", str(FIXTURE), "--dry-run", "--client", "codex"]
+        ["audit", "--no-discover", "--config", str(cfg), "--dry-run", "--client", "codex"]
     )
     out = capsys.readouterr()
 
