@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -34,6 +35,21 @@ def _add_output_flags(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--min-score", type=int, default=None, help="Also fail below this score.")
     parser.add_argument("--verbose", action="store_true", help="Show extra detail per finding.")
+    parser.add_argument(
+        "--baseline",
+        metavar="PATH",
+        default=None,
+        help=(
+            "Withhold findings already recorded in this file and fail only on new "
+            "ones. Write it with --write-baseline."
+        ),
+    )
+    parser.add_argument(
+        "--write-baseline",
+        metavar="PATH",
+        default=None,
+        help="Record the current findings to PATH so a later run can ignore them.",
+    )
     parser.add_argument(
         "--json-out",
         metavar="PATH",
@@ -137,6 +153,67 @@ def _emit(report: Report, args: argparse.Namespace) -> None:
         print(render_sarif(report))
     else:
         print(render_text(report, verbose=args.verbose))
+
+
+def _apply_baseline(report: Report, args: argparse.Namespace) -> Report | None:
+    """Write and/or apply a baseline. Returns None when the file is unusable.
+
+    A baseline is how an existing project adopts the tool at all: the first run
+    on a real repo finds things that predate you, and failing CI on all of them
+    means nobody turns it on.
+    """
+    write_path = getattr(args, "write_baseline", None)
+    if write_path:
+        payload = {
+            "version": 1,
+            "findings": [
+                {
+                    "fingerprint": finding.fingerprint,
+                    "rule": finding.rule,
+                    "severity": finding.severity.value,
+                    "tool": finding.tool,
+                    "message": finding.message,
+                }
+                for finding in report.findings
+            ],
+        }
+        try:
+            Path(write_path).write_text(
+                json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+        except OSError as exc:
+            print(f"agentcheckup: cannot write baseline {write_path}: {exc}", file=sys.stderr)
+            return None
+        print(
+            f"agentcheckup: recorded {len(report.findings)} finding(s) in {write_path}",
+            file=sys.stderr,
+        )
+
+    read_path = getattr(args, "baseline", None)
+    if not read_path:
+        return report
+
+    try:
+        payload = json.loads(Path(read_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"agentcheckup: cannot read baseline {read_path}: {exc}", file=sys.stderr)
+        return None
+
+    entries = payload.get("findings") if isinstance(payload, dict) else None
+    if not isinstance(entries, list):
+        print(
+            f"agentcheckup: {read_path} is not a baseline file (no findings array).",
+            file=sys.stderr,
+        )
+        return None
+
+    known = {
+        entry.get("fingerprint") for entry in entries if isinstance(entry, dict)
+    }
+    kept = [finding for finding in report.findings if finding.fingerprint not in known]
+    report.suppressed = len(report.findings) - len(kept)
+    report.findings = kept
+    return report
 
 
 def _exit_code(report: Report, fail_on: str, min_score: int | None) -> int:
@@ -347,6 +424,9 @@ def _run_audit(args: argparse.Namespace) -> int:
         source=f"{len(configs)} config(s)",
         partial=partial,
     )
+    report = _apply_baseline(report, args)
+    if report is None:
+        return EXIT_USAGE
     _emit(report, args)
     return _exit_code(report, args.fail_on, args.min_score)
 
@@ -387,6 +467,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"agentcheckup: {exc}", file=sys.stderr)
         return EXIT_USAGE
 
+    report = _apply_baseline(report, args)
+    if report is None:
+        return EXIT_USAGE
     _emit(report, args)
     return _exit_code(report, args.fail_on, args.min_score)
 

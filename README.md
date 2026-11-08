@@ -121,7 +121,7 @@ The fastest way to keep a manifest from regressing, and the version you pin is
 the version you run — the action installs from its own checkout.
 
 ```yaml
-- uses: jiaqinq/agentcheckup@v0.6.0
+- uses: jiaqinq/agentcheckup@v0.7.0
   with:
     config: .mcp.json
     fail-on: warning
@@ -176,6 +176,28 @@ what keeps `search_repositories` and `search_documents` apart — without it the
 false-positive rate made the report untrustworthy, which is worse than no report.
 
 It is a heuristic, and the docs say so. `AGT203` is a warning, not a verdict.
+
+## Adopting it on an existing project
+
+The first run on a real repository finds things that were there before you
+arrived. Failing CI on all of them means the tool never gets turned on. Record
+them once, then fail only on what is new:
+
+```console
+$ agentcheckup audit --write-baseline .agentcheckup-baseline.json
+agentcheckup: recorded 8 finding(s) in .agentcheckup-baseline.json
+
+$ agentcheckup audit --baseline .agentcheckup-baseline.json
+baseline: 8 known finding(s) withheld
+  Grade A    Score 100/100   clean
+```
+
+The baseline is plain JSON listing what it suppresses, so a reviewer can see what
+was accepted. Fingerprints ignore severity — escalating a rule does not orphan
+every entry — and an unreadable baseline is a usage error rather than a silent
+no-op.
+
+Commit the file. Regenerate it when you fix things, so the list only shrinks.
 
 ## Pick your clients
 

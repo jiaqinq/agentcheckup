@@ -6,6 +6,7 @@ across MCP spec revisions without chasing an SDK release.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -35,6 +36,19 @@ class Finding:
     tool: str | None = None
     hint: str | None = None
     where: str | None = None
+
+    @property
+    def fingerprint(self) -> str:
+        """Stable identity for baselines.
+
+        Built from rule, tool, where and message. Severity is excluded on
+        purpose: escalating a rule must not orphan every baseline entry, and the
+        point of a baseline is "this existed before", not "this looked the same".
+        """
+        material = "|".join(
+            [self.rule, self.tool or "", self.where or "", self.message]
+        )
+        return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
 
     def as_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {

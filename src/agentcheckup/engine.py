@@ -26,6 +26,8 @@ class Report:
     #: Servers that answered but whose tool list was cut short (page or tool cap,
     #: or a mid-listing failure). Their tools were seen, but not all of them.
     servers_partial: int = 0
+    #: Findings withheld because a baseline already recorded them.
+    suppressed: int = 0
 
     @property
     def coverage(self) -> float:

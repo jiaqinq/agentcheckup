@@ -9,6 +9,35 @@ new ids, and removing a rule is a breaking change.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-08
+
+### Added
+
+- **`--baseline PATH` / `--write-baseline PATH`.** Record today's findings, then
+  fail only on what appears afterwards:
+
+  ```console
+  $ agentcheckup audit --write-baseline .agentcheckup-baseline.json
+  agentcheckup: recorded 8 finding(s) in .agentcheckup-baseline.json
+
+  $ agentcheckup audit --baseline .agentcheckup-baseline.json
+  baseline: 8 known finding(s) withheld
+  Grade A    Score 100/100   clean
+  ```
+
+  This is the difference between a tool you try once and a tool you put in CI.
+  The first run on a real repository finds things that predate you; failing the
+  build on all of them means nobody turns it on.
+
+  The fingerprint is built from `rule`, `tool`, `where` and the message, and
+  **deliberately excludes severity**: escalating a rule must not orphan every
+  baseline entry. The file is plain JSON and lists the findings it suppresses, so
+  a reviewer can see what was accepted rather than trusting an opaque hash.
+
+  An unreadable or malformed baseline is a usage error (exit 2), not a silent
+  no-op — a baseline that fails to load would otherwise re-enable every finding
+  and the first anyone notices is a red build.
+
 ## [0.6.0] - 2026-11-08
 
 Two controls for the audit. Both are additive: the default run behaves exactly as

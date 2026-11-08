@@ -10,7 +10,7 @@ from . import rules as _rules
 from .engine import Report
 from .models import Finding, Severity
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 SARIF_LEVEL = {
     Severity.ERROR: "error",
@@ -151,6 +151,9 @@ def render_text(report: Report, verbose: bool = False) -> str:
     if report.source:
         lines.append(f"source: {report.source}")
 
+    if report.suppressed:
+        lines.append(f"baseline: {report.suppressed} known finding(s) withheld")
+
     if report.kind == "audit" and report.server_count:
         detail = f"{report.servers_unverified} unverified"
         if report.servers_partial:
@@ -217,6 +220,7 @@ def render_json(report: Report) -> str:
         "servers_inspected": report.servers_inspected,
         "servers_unverified": report.servers_unverified,
         "servers_partial": report.servers_partial,
+        "suppressed": report.suppressed,
         "coverage": round(report.coverage, 3),
         "estimated_tokens": report.tokens,
         "score": report.score,
