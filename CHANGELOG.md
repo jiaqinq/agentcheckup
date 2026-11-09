@@ -55,9 +55,10 @@ this tool never edits one; the remediation text lives in `properties.hint`.
 ### Added
 
 - **`AGT205`**: same server name at two scopes of one client. 38 rules now.
-- The action self-test uploads its SARIF to GitHub code scanning on every push to
-  `main`. A consumer either accepts the document or fails the job — the only
-  real check that the format output is usable.
+- The action self-test now uploads its SARIF to code scanning as well, under its
+  own category. CI already uploaded from the Linux self-lint job, and that is
+  exactly why the Windows URI defect survived: every upload until now came from a
+  runner where paths already use forward slashes.
 
 ## [0.8.1] - 2026-11-08
 

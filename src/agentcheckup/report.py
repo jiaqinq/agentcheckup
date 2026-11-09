@@ -251,6 +251,11 @@ def _sarif_uri(source: str) -> str:
     if not text or text.startswith("cmd:") or text.endswith("config(s)"):
         return SARIF_FALLBACK_URI
 
+    # A backslash is not a URI path separator on any platform, so normalise it
+    # before asking Path what this is. On POSIX a backslash is an ordinary
+    # filename character, which is exactly why this cannot be left to Path.
+    text = text.replace("\\", "/")
+
     try:
         path = Path(text)
         if path.is_absolute():
@@ -258,6 +263,10 @@ def _sarif_uri(source: str) -> str:
                 path = path.resolve().relative_to(Path.cwd().resolve())
             except ValueError:
                 path = Path(path.name)
+        elif len(text) > 2 and text[1] == ":" and text[0].isalpha():
+            # A Windows path on a POSIX host: Path will not call it absolute,
+            # and the drive letter would read as a URI scheme.
+            path = Path(text.rsplit("/", 1)[-1])
     except (OSError, ValueError):
         return SARIF_FALLBACK_URI
     return path.as_posix()
