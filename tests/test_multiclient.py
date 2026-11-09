@@ -123,13 +123,17 @@ def test_discovery_marks_which_client_each_server_came_from(tmp_path, monkeypatc
     make_sandbox(tmp_path, monkeypatch)
 
     found = discovery.discover(cwd=tmp_path / "nowhere")
-    labels = {label for label, _ in found}
+    labels = {location.label for location in found}
     assert "Cursor" in labels
     assert "Claude Desktop" in labels
 
     servers = []
-    for label, path in found:
-        servers.extend(discovery.load_servers(path, label))
+    for location in found:
+        servers.extend(
+            discovery.load_servers(
+                location.path, location.label, client=location.client, scope=location.scope
+            )
+        )
 
     clients = {server.client for server in servers}
     assert clients == {"Cursor", "Claude Desktop"}, clients

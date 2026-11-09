@@ -33,7 +33,7 @@ the collision rather than promising a particular outcome — an earlier version 
 this project claimed "the client keeps one and the other is unreachable", which
 was a guess dressed up as a fact.
 
-## Four kinds, four rule ids
+## Five kinds, five rule ids
 
 | Rule | Severity | Condition |
 |---|---|---|
@@ -41,10 +41,18 @@ was a guess dressed up as a fact.
 | `AGT202` | warning | Names that differ but normalise to the same tokens |
 | `AGT203` | warning | Different names, descriptions that overlap heavily |
 | `AGT204` | info | Same name, but in **different clients** |
+| `AGT205` | info | Same server name at **two scopes** of one client |
 
 `AGT204` exists because Cursor and Codex never load each other's config. The same
 name in both is not an unreachable duplicate, and reporting it as one is a false
 positive on the most common multi-client setup.
+
+`AGT205` covers the other near-miss: a user-level and a project-level config of the
+*same* client, both declaring `filesystem`. Claude Code documents its order
+(Local > Project > User) and the losing entry is dropped before the manifest is
+built, so what is left is a note saying which one won. Cursor and VS Code read both
+files but document no rule for a duplicate name; that stays a note too, because
+guessing would either hide a collision or invent one.
 
 ## How names are normalised
 

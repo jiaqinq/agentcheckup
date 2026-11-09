@@ -46,6 +46,11 @@ SUITE_RULES: list[SuiteRule] = [
         Severity.INFO,
         "Same tool name in two different clients",
     ),
+    SuiteRule(
+        "AGT205",
+        Severity.INFO,
+        "Same server name at two scopes of one client",
+    ),
 ]
 
 

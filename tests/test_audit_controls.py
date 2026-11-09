@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from agentcheckup import cli
+from agentcheckup.discovery import ConfigLocation
 
 
 def write_config(path: Path, servers: dict) -> Path:
@@ -23,12 +24,15 @@ def write_config(path: Path, servers: dict) -> Path:
     return path
 
 
-def fake_configs(tmp_path: Path) -> list[tuple[str, Path]]:
+def fake_configs(tmp_path: Path) -> list[ConfigLocation]:
     # Distinct commands on purpose: identical launch specs are deduped, which is
     # correct behaviour but would hide what these tests are checking.
     cursor = write_config(tmp_path / "cursor.json", {"c1": {"command": "cursor-mcp"}})
     codex = write_config(tmp_path / "codex.json", {"x1": {"command": "codex-mcp"}})
-    return [("Cursor", cursor), ("Codex CLI", codex)]
+    return [
+        ConfigLocation("Cursor", cursor, "Cursor", "user"),
+        ConfigLocation("Codex CLI", codex, "Codex CLI", "user"),
+    ]
 
 
 @pytest.fixture()

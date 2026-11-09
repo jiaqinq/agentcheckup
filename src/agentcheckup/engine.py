@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 from . import rules as _rules  # noqa: F401 - side effect: registers rules
 from .conflicts import ToolRef, lint_conflicts
+from .discovery import SCOPE_PRECEDENCE
 from .models import Finding, ServerConfig, Severity, Tool, grade_for, score_findings
 from .tokens import manifest_tokens
 
@@ -123,26 +124,173 @@ def lint_servers(servers: list[ServerConfig], source: str = "") -> Report:
     )
 
 
+def _scope_findings(
+    servers: list[ServerConfig],
+    shadowed: list[tuple[ServerConfig, ServerConfig]],
+) -> list[Finding]:
+    """Report same-name servers that live at two scopes of one client.
+
+    Two cases, and they are different:
+
+    - **Resolved.** The client documents its precedence (Claude Code), so
+      ``resolve_scopes`` already dropped the loser. The note explains why that
+      server's tools are missing from the manifest.
+    - **Unresolved.** The client reads both files but documents no rule for a
+      duplicate name (Cursor, VS Code). One probably wins; saying which would be
+      a guess, so this is a note rather than an error — and it is emitted from
+      the config alone, so it still appears under ``--no-spawn``.
+
+    Either way it is information: the config is doing what the client tells it to.
+    """
+    out: list[Finding] = []
+
+    for loser, winner in shadowed:
+        out.append(
+            Finding(
+                rule="AGT205",
+                severity=Severity.INFO,
+                message=(
+                    f"Server {loser.name!r} at {loser.scope} scope is shadowed by the "
+                    f"{winner.scope}-scope definition in {winner.client}: only one is "
+                    f"loaded, so its tools are not part of this manifest."
+                ),
+                tool=loser.name,
+                hint=(
+                    "Not a problem — it is how the client resolves a duplicate name. "
+                    "Remove the unused entry if it is stale."
+                ),
+            )
+        )
+
+    groups: dict[tuple[str, str], list[ServerConfig]] = {}
+    for server in servers:
+        groups.setdefault((server.client, server.name), []).append(server)
+
+    for (client, name), group in groups.items():
+        if len(group) < 2 or client in SCOPE_PRECEDENCE:
+            continue
+        scopes = sorted({server.scope for server in group if server.scope})
+        if len(scopes) < 2:
+            continue
+        out.append(
+            Finding(
+                rule="AGT205",
+                severity=Severity.INFO,
+                message=(
+                    f"Server {name!r} is defined at {', '.join(scopes)} scope in "
+                    f"{client}. One of them is probably the one that loads, but "
+                    f"{client} documents no rule for a duplicate name."
+                ),
+                tool=name,
+                hint=(
+                    "Check the client's own server list. If both load, this is a hard "
+                    "collision; otherwise delete the entry you do not use."
+                ),
+            )
+        )
+
+    return out
+
+
+def _scope_findings(
+    servers: list[ServerConfig],
+    shadowed: list[tuple[ServerConfig, ServerConfig]],
+) -> list[Finding]:
+    """Report same-name servers that live at two scopes of one client.
+
+    Two cases, and they are different:
+
+    - **Resolved.** The client documents its precedence (Claude Code), so
+      ``resolve_scopes`` already dropped the loser. The note explains why that
+      server's tools are missing from the manifest.
+    - **Unresolved.** The client reads both files but documents no rule for a
+      duplicate name (Cursor, VS Code). One probably wins; saying which would be
+      a guess, so this is a note rather than an error — and it is emitted from
+      the config alone, so it still appears under ``--no-spawn``.
+
+    Either way it is information: the config is doing what the client tells it to.
+    """
+    out: list[Finding] = []
+
+    for loser, winner in shadowed:
+        out.append(
+            Finding(
+                rule="AGT205",
+                severity=Severity.INFO,
+                message=(
+                    f"Server {loser.name!r} at {loser.scope} scope is shadowed by the "
+                    f"{winner.scope}-scope definition in {winner.client}: only one is "
+                    f"loaded, so its tools are not part of this manifest."
+                ),
+                tool=loser.name,
+                hint=(
+                    "Not a problem — it is how the client resolves a duplicate name. "
+                    "Remove the unused entry if it is stale."
+                ),
+            )
+        )
+
+    groups: dict[tuple[str, str], list[ServerConfig]] = {}
+    for server in servers:
+        groups.setdefault((server.client, server.name), []).append(server)
+
+    for (client, name), group in groups.items():
+        if len(group) < 2 or client in SCOPE_PRECEDENCE:
+            continue
+        scopes = sorted({server.scope for server in group if server.scope})
+        if len(scopes) < 2:
+            continue
+        out.append(
+            Finding(
+                rule="AGT205",
+                severity=Severity.INFO,
+                message=(
+                    f"Server {name!r} is defined at {', '.join(scopes)} scope in "
+                    f"{client}. One of them is probably the one that loads, but "
+                    f"{client} documents no rule for a duplicate name."
+                ),
+                tool=name,
+                hint=(
+                    "Check the client's own server list. If both load, this is a hard "
+                    "collision; otherwise delete the entry you do not use."
+                ),
+            )
+        )
+
+    return out
+
+
 def lint_audit(
     servers: list[ServerConfig],
     tools_by_server: dict[str, list[Tool]],
     failures: dict[str, str] | None = None,
     source: str = "",
     partial: dict[str, str] | None = None,
+    shadowed: list[tuple[ServerConfig, ServerConfig]] | None = None,
 ) -> Report:
     """The full check: config risk + per-server tool quality + cross-server conflicts."""
     failures = failures or {}
     partial = partial or {}
+    shadowed = shadowed or []
     findings = _server_findings(servers)
+    findings.extend(_scope_findings(servers, shadowed))
 
     client_of = {server.key: server.client for server in servers}
+    scope_of = {server.key: server.scope for server in servers}
+    name_of = {server.key: server.name for server in servers}
 
     refs: list[ToolRef] = []
     for server_name, tools in tools_by_server.items():
         findings.extend(_tool_findings(tools))
-        client = client_of.get(server_name, "")
         refs.extend(
-            ToolRef(server=server_name, tool=tool, client=client) for tool in tools
+            ToolRef(
+                server=server_name,
+                tool=tool,
+                client=client_of.get(server_name, ""),
+                scope=scope_of.get(server_name, ""),
+                server_name=name_of.get(server_name, ""),
+            )
+            for tool in tools
         )
 
     findings.extend(lint_conflicts(refs))

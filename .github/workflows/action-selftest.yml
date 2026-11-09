@@ -11,6 +11,9 @@ on:
 
 permissions:
   contents: read
+  # Needed by the upload step below. Scoped to the job, not the workflow, so the
+  # assertion steps cannot do more than read.
+  security-events: write
 
 jobs:
   self-test:
@@ -42,6 +45,16 @@ jobs:
             cat agentcheckup.sarif
             exit 1
           }
+
+      - name: Upload the SARIF to code scanning
+        # The only real proof that `--format sarif` produces something a consumer
+        # accepts: GitHub either parses it or fails the job. Restricted to pushes
+        # on main because pull requests from forks have no write token.
+        if: github.event_name == 'push'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: agentcheckup.sarif
+          category: agentcheckup
 
       - name: Assert the gate fails when it should
         run: |

@@ -25,7 +25,7 @@ def server(name: str = "s") -> dict:
 
 
 def test_every_editor_gets_the_extension_paths():
-    labels = [label for label, _ in candidate_paths(Path("/tmp/x"))]
+    labels = [location.label for location in candidate_paths(Path("/tmp/x"))]
     joined = " ".join(labels)
     for expected in ("Cline", "Roo Code", "Kilo Code", "Zed", "Codex CLI", "Claude Code"):
         assert expected in joined, f"{expected} missing from {labels}"
@@ -34,20 +34,23 @@ def test_every_editor_gets_the_extension_paths():
 def test_paths_are_absolute_and_unique():
     # Use the real cwd: a POSIX-looking literal is not absolute on Windows, which
     # would make this test assert something about the test, not the code.
-    paths = [p for _, p in candidate_paths(Path.cwd())]
+    paths = [location.path for location in candidate_paths(Path.cwd())]
     assert all(p.is_absolute() for p in paths)
     assert len(paths) == len(set(paths))
 
 
 def test_discovery_finds_project_local_config(tmp_path):
     cfg = write_json(tmp_path / ".mcp.json", {"mcpServers": {"demo": server()}})
-    assert cfg in [p for _, p in discover(cwd=tmp_path)]
+    assert cfg in [location.path for location in discover(cwd=tmp_path)]
 
 
 def test_discovery_ignores_missing_paths(tmp_path):
     # A fresh temp dir has no client configs; discovery must return nothing
     # rather than raising or inventing paths.
-    found = [p for _, p in discover(cwd=tmp_path) if tmp_path in p.parents]
+    found = [
+        location.path for location in discover(cwd=tmp_path)
+        if tmp_path in location.path.parents
+    ]
     assert found == []
 
 
@@ -78,7 +81,13 @@ def test_zed_context_servers(tmp_path):
     assert [s.name for s in load_servers(cfg)] == ["zed"]
 
 
-def test_claude_code_nested_project_servers_are_loaded(tmp_path):
+def test_claude_code_project_servers_load_only_for_that_project(tmp_path):
+    """`projects` entries are local scope: they apply only in that directory.
+
+    The previous version loaded every project's servers into one audit and
+    prefixed their names to keep them apart. That invented servers the user does
+    not have, and inflated both the manifest and the token estimate.
+    """
     cfg = write_json(
         tmp_path / "claude.json",
         {
@@ -86,9 +95,25 @@ def test_claude_code_nested_project_servers_are_loaded(tmp_path):
             "projects": {"/home/me/proj": {"mcpServers": {"local": server("b")}}},
         },
     )
-    names = {s.name for s in load_servers(cfg, "Claude Code")}
-    assert "global" in names
-    assert any(n.endswith(":local") for n in names), names
+
+    elsewhere = {s.name for s in load_servers(cfg, "Claude Code", cwd=tmp_path)}
+    assert elsewhere == {"global"}
+
+    inside = {
+        s.name
+        for s in load_servers(cfg, "Claude Code", cwd=Path("/home/me/proj"))
+    }
+    assert inside == {"global", "local"}
+
+
+def test_claude_code_project_servers_are_marked_local_scope(tmp_path):
+    cfg = write_json(
+        tmp_path / "claude.json",
+        {"projects": {"/home/me/proj": {"mcpServers": {"local": server("b")}}}},
+    )
+    servers = load_servers(cfg, "Claude Code", cwd=Path("/home/me/proj"))
+    assert [s.scope for s in servers] == ["local"]
+
 
 
 def test_codex_toml_is_parsed(tmp_path):

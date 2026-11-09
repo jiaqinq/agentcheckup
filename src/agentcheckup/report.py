@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import unicodedata
+from pathlib import Path
 from typing import Any
 
 from . import rules as _rules
 from .engine import Report
 from .models import Finding, Severity
 
-__version__ = "0.8.1"
+__version__ = "0.9.0"
 
 SARIF_LEVEL = {
     Severity.ERROR: "error",
@@ -231,9 +232,40 @@ def render_json(report: Report) -> str:
     return json.dumps(payload, indent=2, ensure_ascii=False)
 
 
+#: Placeholder artifact for reports that did not come from one file.
+SARIF_FALLBACK_URI = "mcp-tools.json"
+
+
+def _sarif_uri(source: str) -> str:
+    """Turn a report source into a URI reference a SARIF consumer can resolve.
+
+    The schema types ``artifactLocation.uri`` as ``uri-reference``, and a Windows
+    path is not one: backslashes are not path separators in a URI, and a drive
+    letter reads as a scheme. GitHub code scanning then cannot map the result to
+    a file, which is the whole point of uploading SARIF.
+
+    Absolute paths outside the working tree keep only their file name — a path
+    the consumer cannot see is worse than a short one it can.
+    """
+    text = (source or "").strip()
+    if not text or text.startswith("cmd:") or text.endswith("config(s)"):
+        return SARIF_FALLBACK_URI
+
+    try:
+        path = Path(text)
+        if path.is_absolute():
+            try:
+                path = path.resolve().relative_to(Path.cwd().resolve())
+            except ValueError:
+                path = Path(path.name)
+    except (OSError, ValueError):
+        return SARIF_FALLBACK_URI
+    return path.as_posix()
+
+
 def render_sarif(report: Report) -> str:
     """SARIF 2.1.0 so findings show up in GitHub code scanning for free."""
-    uri = report.source or "mcp-tools.json"
+    uri = _sarif_uri(report.source)
     results: list[dict[str, Any]] = []
     for finding in report.sorted_findings():
         result: dict[str, Any] = {
@@ -250,7 +282,8 @@ def render_sarif(report: Report) -> str:
             ],
         }
         if finding.hint:
-            result["fixes"] = []
+            # No `fixes`: a fix must name edits to a file, and this tool never
+            # edits one. An empty array is schema-legal and says nothing.
             result["properties"] = {"hint": finding.hint}
         results.append(result)
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentcheckup"
-version = "0.8.1"
+version = "0.9.0"
 description = "MCP tool conflict detector and config auditor for AI agents: cross-server name collisions, risky MCP settings, and tool-manifest token overhead."
 readme = "README.md"
 requires-python = ">=3.10"

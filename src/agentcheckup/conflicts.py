@@ -62,6 +62,12 @@ class ToolRef:
     #: Which client declared the server. Two clients never load each other's
     #: config, so a name clash across them is not a runtime collision.
     client: str = ""
+    #: Which scope within that client: user, project, local. A clash across
+    #: scopes is a shadowing rule, not necessarily a collision.
+    scope: str = ""
+    #: The name as written in the config. ``server`` is the instance key
+    #: (``filesystem#2``), which is not what shadowing compares.
+    server_name: str = ""
 
     @property
     def qualified(self) -> str:
@@ -208,15 +214,27 @@ def _different_clients(a: ToolRef, b: ToolRef) -> bool:
     return bool(a.client) and bool(b.client) and a.client != b.client
 
 
-def _different_clients(a: ToolRef, b: ToolRef) -> bool:
-    """True when the two servers were declared in different clients.
+def _different_scopes(a: ToolRef, b: ToolRef) -> bool:
+    """True when one client defines the same server at two scopes.
 
-    Each client loads only its own config, so the same name in Cursor and in
-    Codex is not an unreachable duplicate — nothing ever loads both lists at
-    once. Reporting it as a hard collision is a false positive, and false
-    positives are what make people stop reading the report.
+    Claude Code's precedence is documented, so those pairs are resolved before
+    this point. What reaches here is a client whose rule is not documented
+    (Cursor, VS Code): one entry probably wins, but saying which would be a
+    guess. That is a note, not an error.
+
+    Only the *same server name* qualifies. Two different servers of one client
+    at different scopes are both loaded and can genuinely collide, so they keep
+    the normal rules.
     """
-    return bool(a.client) and bool(b.client) and a.client != b.client
+    same_server = bool(a.server_name) and a.server_name == b.server_name
+    return (
+        same_server
+        and bool(a.client)
+        and a.client == b.client
+        and bool(a.scope)
+        and bool(b.scope)
+        and a.scope != b.scope
+    )
 
 
 def _cross_server_pairs(group: list[ToolRef]):
@@ -324,6 +342,11 @@ def detect_conflicts(
                     "Only worth acting on if you use a proxy that merges clients.",
                 )
                 continue
+            if _different_scopes(a, b):
+                # Reported once, at config level, by engine._scope_findings():
+                # that version also works under --no-spawn, where no tools are
+                # known. Emitting here as well would double every such pair.
+                continue
             emit(
                 "AGT201",
                 Severity.ERROR,
@@ -362,6 +385,10 @@ def detect_conflicts(
                     "Separate clients never load each other's config.",
                 )
                 continue
+            if _different_scopes(a, b):
+                # Same reasoning as above: one client, two scopes. The scope
+                # question is answered from the config, not from tool names.
+                continue
             emit(
                 "AGT202",
                 Severity.WARNING,
@@ -375,6 +402,10 @@ def detect_conflicts(
 
     # --- 3. capability overlap ---------------------------------------------
     for a, b in _soft_candidates(refs, max_pairs):
+        if _different_scopes(a, b):
+            # Same server name, two scopes: one shadows the other. Scoring their
+            # descriptions would report the shadowed copy as a rival tool.
+            continue
         flagged, score = is_ambiguous(a, b, threshold=threshold)
         if not flagged:
             continue

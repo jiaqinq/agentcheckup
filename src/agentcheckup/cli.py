@@ -9,7 +9,7 @@ import re
 import sys
 from pathlib import Path
 
-from .discovery import discover, load_servers, take_toml_skips
+from .discovery import ConfigLocation, discover, load_servers, resolve_scopes, take_toml_skips
 from .engine import Report, lint_audit, lint_servers, lint_tools
 from .loader import LoadError, StdioSession, load_from_file, servers_from_config
 from .models import ServerConfig, Severity
@@ -386,9 +386,9 @@ def _run_audit(args: argparse.Namespace) -> int:
     if args.client:
         wanted = [name.lower() for name in args.client]
         configs = [
-            (label, path)
-            for label, path in configs
-            if any(name in label.lower() for name in wanted)
+            location
+            for location in configs
+            if any(name in location.label.lower() for name in wanted)
         ]
         if not configs and not args.config:
             print(
@@ -403,7 +403,7 @@ def _run_audit(args: argparse.Namespace) -> int:
         if not path.is_file():
             print(f"agentcheckup: no such config file: {path}", file=sys.stderr)
             return EXIT_USAGE
-        configs.append(("explicit", path))
+        configs.append(ConfigLocation("explicit", path, "explicit", "explicit"))
 
     if not configs:
         print(
@@ -416,13 +416,24 @@ def _run_audit(args: argparse.Namespace) -> int:
         return EXIT_USAGE
 
     servers: list[ServerConfig] = []
-    for label, path in configs:
-        servers.extend(load_servers(path, label))
+    for location in configs:
+        servers.extend(
+            load_servers(
+                location.path,
+                location.label,
+                client=location.client,
+                scope=location.scope,
+            )
+        )
 
     for note in take_toml_skips():
         print(f"agentcheckup: could not read TOML config {note}", file=sys.stderr)
 
     servers = _dedupe(servers)
+    _assign_instances(servers)
+    servers, shadowed = resolve_scopes(servers)
+    # Renumber: a server that was `filesystem#2` because a shadowed twin existed
+    # is the only one left, and should be reported under its own name.
     _assign_instances(servers)
 
     if not servers:
@@ -481,6 +492,7 @@ def _run_audit(args: argparse.Namespace) -> int:
         failures={} if args.no_spawn else failures,
         source=f"{len(configs)} config(s)",
         partial=partial,
+        shadowed=shadowed,
     )
     report = _apply_baseline(report, args)
     if report is None:

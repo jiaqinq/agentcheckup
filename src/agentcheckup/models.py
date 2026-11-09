@@ -123,6 +123,11 @@ class ServerConfig:
     #: clients never load each other's config, so a name clash between them is
     #: not a runtime collision.
     client: str = ""
+    #: Where within that client: ``user``, ``project``, ``local`` or ``explicit``.
+    #: Scope is not the same thing as client — Claude Code's project ``.mcp.json``
+    #: is still Claude Code, and it shadows the user-level entry of the same name
+    #: rather than colliding with it.
+    scope: str = ""
     #: Codex's ``env_vars``: names to inherit from the parent environment. The
     #: values are never stored or printed here — only the names, which are not
     #: secrets by themselves.
@@ -142,6 +147,7 @@ class ServerConfig:
         data: dict[str, Any],
         source: str | None = None,
         client: str = "",
+        scope: str = "",
     ) -> ServerConfig:
         args = data.get("args") or []
         if not isinstance(args, list):
@@ -163,6 +169,7 @@ class ServerConfig:
             url=data.get("url") or data.get("serverUrl"),
             source=source,
             client=client,
+            scope=scope,
             env_passthrough=[str(name) for name in env_vars if str(name).strip()],
             startup_timeout=float(startup) if startup else None,
         )

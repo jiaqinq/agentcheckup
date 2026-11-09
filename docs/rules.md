@@ -225,6 +225,25 @@ It matters only if you run a proxy that merges several clients into one tool lis
 When the client is unknown, the strict answer (`AGT201`) is used instead: better
 to warn twice than to downgrade a real collision.
 
+### AGT205 · info · Same server name at two scopes of one client
+A client with both a user-level and a project-level config can define `filesystem`
+in each. That is one client at two scopes, not two clients, so it is neither
+`AGT201` nor `AGT204`.
+
+Two outcomes, and the difference matters:
+
+- **Resolved.** Claude Code documents its order — Local > Project > User, and
+  "connects to it once, using the definition from the highest-precedence source".
+  The losing entry is dropped before the manifest is built, and this rule says
+  which one won.
+- **Unresolved.** Cursor and VS Code read both files but document no rule for a
+  duplicate name. Reporting an error would be a guess in either direction, so
+  this stays information and says so.
+
+Only a repeated *server name* qualifies. `github` at user scope and `docs` at
+project scope are two different servers; both load, and a shared tool name
+between them is a real collision.
+
 ### AGT203 · warning · Two servers expose overlapping tools
 The soft case: different names, but descriptions that overlap ≥ 65% and a shared
 head noun. Selection becomes a coin flip that presents as model flakiness.

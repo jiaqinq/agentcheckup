@@ -9,6 +9,56 @@ new ids, and removing a rule is a breaking change.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-09
+
+### Fixed — scope was being treated as client
+
+A client with both a user-level and a project-level config had those two files
+counted as two different clients. `project .mcp.json` was a "client" distinct from
+`Claude Code`, so a server named `filesystem` in both was reported as
+*"Separate clients, separate configs: they are never loaded together."* That is
+false: it is one client, and one of the two entries shadows the other.
+
+- `ServerConfig` and `ToolRef` now carry `scope` (`user` / `project` / `local`)
+  separately from `client`, and the three project-level locations map to the
+  client that actually reads them.
+- **Claude Code precedence is applied.** Its documentation states the order —
+  Local > Project > User — and that a duplicate name is "connected to once, using
+  the definition from the highest-precedence source". The losing entry is now
+  dropped before the manifest is built, so it is neither spawned nor counted.
+- **Cursor and VS Code are not resolved, on purpose.** Both read a user and a
+  workspace file; neither documents a rule for a duplicate name. Guessing would
+  either hide a collision or invent one, so the pair is reported as `AGT205`
+  (info) and the message says the rule is undocumented.
+
+### Fixed — every project's local servers were loaded at once
+
+`~/.claude.json` stores per-project `mcpServers` under `projects`, and all of them
+were loaded into one audit, with the server names prefixed by directory name to
+keep them apart. Only the entry matching the working directory applies — that is
+what local scope means — so only that one is read now, and the prefix is gone.
+
+### Fixed — SARIF pointed at a path no consumer could resolve
+
+`artifactLocation.uri` is typed `uri-reference` in the SARIF schema, and a Windows
+path is not one: `tests\fixtures\bad_tools.json` has backslashes, which a URI
+does not allow. GitHub code scanning cannot map such a result to a file, which is
+the only reason to emit SARIF at all. Paths are now POSIX-style and relative to
+the working tree; absolute paths outside it keep their file name.
+
+Reports that did not come from a file (`audit` says "3 config(s)") used to put
+that sentence in the URI. They now use a placeholder artifact name.
+
+The empty `fixes: []` array is gone too. A fix has to name edits to a file, and
+this tool never edits one; the remediation text lives in `properties.hint`.
+
+### Added
+
+- **`AGT205`**: same server name at two scopes of one client. 38 rules now.
+- The action self-test uploads its SARIF to GitHub code scanning on every push to
+  `main`. A consumer either accepts the document or fails the job — the only
+  real check that the format output is usable.
+
 ## [0.8.1] - 2026-11-08
 
 ### Fixed — Codex servers were starting without their environment

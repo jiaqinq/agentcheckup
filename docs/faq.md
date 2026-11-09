@@ -44,8 +44,8 @@ collide with itself.
 ## Is it an MCP server linter?
 
 Partly. It lints the *tool definitions* a server publishes — names, descriptions,
-schemas, annotations — with 24 rules, plus 6 suite-level rules that only make sense
-across several servers, and 7 on the configuration itself. 37 in total.
+schemas, annotations — with 24 rules, plus 7 suite-level rules that only make sense
+across several servers, and 7 on the configuration itself. 38 in total.
 
 It does not lint server source code, and it does not check the protocol handshake
 against the specification. For protocol conformance, the official conformance suite

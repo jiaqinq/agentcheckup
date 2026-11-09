@@ -1,7 +1,7 @@
 # Auditing MCP server configuration
 
 **Short answer:** most MCP risks are visible in the config file, not at runtime.
-`agentcheckup` reads the configs your clients already have, applies 37 rules, and
+`agentcheckup` reads the configs your clients already have, applies 38 rules, and
 tells you which settings are worth changing.
 
 ```bash

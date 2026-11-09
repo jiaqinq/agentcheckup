@@ -20,7 +20,7 @@ agentcheckup
 ```
 
 ```console
-agentcheckup 0.8.1  |  2 server(s)  |  4 tool(s)  |  ~442 tokens per request
+agentcheckup 0.9.0  |  2 server(s)  |  4 tool(s)  |  ~442 tokens per request
 source: 1 config(s)
 coverage: 2/2 server(s) inspected (100%), 0 unverified
 
@@ -41,12 +41,12 @@ user's machine — run `agentcheckup` yourself for your own numbers.
 
 | | |
 |---|---|
-| **Cross-server conflicts** | The same tool name in two servers (`AGT201`), the same name once normalised (`AGT202`), overlapping descriptions (`AGT203`), and the same name in two *different clients* (`AGT204`, informational). |
+| **Cross-server conflicts** | The same tool name in two servers (`AGT201`), the same name once normalised (`AGT202`), overlapping descriptions (`AGT203`), the same name in two *different clients* (`AGT204`), and the same server at two *scopes* of one client (`AGT205`). The last two are informational: neither is a collision you can fix by renaming a tool. |
 | **MCP config risks** | Unpinned `npx`/`uvx` packages, plaintext credentials, filesystem servers rooted at a volume root, shell wrapping, permission-bypass flags, prompt injection hidden in tool descriptions. |
 | **Tool-manifest overhead** | A rough token cost for the manifest your agent re-sends on every request. An estimate from the schemas, not a billed figure. |
 | **CI integration** | `--format sarif`, `--fail-on`, `--min-score`, `--baseline`, and a GitHub Action. |
 
-37 rules, zero runtime dependencies, Python 3.10+.
+38 rules, zero runtime dependencies, Python 3.10+.
 
 ## Who it is for
 
@@ -80,7 +80,7 @@ to be.
 | [Auditing MCP server configuration](docs/mcp-configuration-auditing.md) | Every client it finds, the config rules, and what "audit" does not mean |
 | [Tool manifest token cost](docs/mcp-tool-manifest-token-cost.md) | How the estimate is produced, and why it is not a bill |
 | [GitHub Action reference](docs/github-action.md) | Inputs, outputs, SARIF, auto-discovery in CI |
-| [Rule reference](docs/rules.md) | All 37 rules with the reasoning behind each |
+| [Rule reference](docs/rules.md) | All 38 rules with the reasoning behind each |
 | [FAQ](docs/faq.md) | Direct answers, including what the tool does not do |
 
 
@@ -128,11 +128,11 @@ says anything. It is rarely budgeted for because it is rarely measured.
 
 | Layer | Question it answers | Rules |
 |---|---|---|
-| **Conflicts** | Could my agent pick the wrong tool? | AGT201–AGT204 |
+| **Conflicts** | Could my agent pick the wrong tool? | AGT201–AGT205 |
 | **Risks** | Is my setup unsafe? | AGT001–AGT108 |
 | **Budget** | What does my manifest cost per request? | reported on every run |
 
-37 rules in total. Full reference: [docs/rules.md](docs/rules.md).
+38 rules in total. Full reference: [docs/rules.md](docs/rules.md).
 
 ## Install
 
@@ -190,7 +190,7 @@ A quick way to keep a manifest from regressing, and the version you pin is
 the version you run — the action installs from its own checkout.
 
 ```yaml
-- uses: jiaqinq/agentcheckup@v0.8.1
+- uses: jiaqinq/agentcheckup@v0.9.0
   with:
     config: .mcp.json
     fail-on: warning
@@ -260,6 +260,24 @@ AGT204  Tool name 'read_file' exists in both 'Cursor' and 'Codex CLI'.
 Within one client the same name is still `AGT201` (error). When the client is
 unknown the strict answer wins: better to warn twice than to downgrade a real
 collision because a label was missing.
+
+## User config, project config, and which one wins
+
+A client with both a user-level and a project-level config can name the same
+server in each. That is one client at two scopes, not two clients:
+
+```
+AGT205  Server 'filesystem' at user scope is shadowed by the project-scope
+        definition in Claude Code: only one is loaded.
+```
+
+Claude Code documents the order (Local > Project > User) and is resolved
+automatically — the losing entry is dropped before the manifest is built. Cursor
+and VS Code read both files but document no rule for a duplicate name, so that
+case is reported as a note rather than guessed at.
+
+`~/.claude.json` also carries per-project entries; only the one matching the
+current directory is loaded, because that is the only one Claude Code would load.
 
 ## Adopting it on an existing project
 
