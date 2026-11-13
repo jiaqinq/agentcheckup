@@ -11,7 +11,7 @@ from . import rules as _rules
 from .engine import Report
 from .models import Finding, Severity
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 
 SARIF_LEVEL = {
     Severity.ERROR: "error",

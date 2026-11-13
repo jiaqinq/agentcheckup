@@ -9,6 +9,40 @@ new ids, and removing a rule is a breaking change.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-13
+
+### Added — remote (URL) MCP servers are now actually checked
+
+A server declared with `url` was previously recorded as *"remote server (url);
+cannot be introspected over stdio"*. It still counted toward `server_count`, so
+the coverage line made it look inspected while none of its tools had been read.
+That was the last place where the report could imply "clean" without evidence.
+
+- **Streamable HTTP introspection.** `HttpSession` performs `initialize`, then
+  pages through `tools/list`, using only `urllib`. Zero runtime dependencies.
+- Handles both `application/json` and `text/event-stream` responses, echoes the
+  `Mcp-Session-Id` the server issues, and follows `nextCursor` with the same
+  page/tool caps as the stdio client.
+- Auth failures (401/403), DNS/connection failures, timeouts, non-JSON bodies and
+  JSON-RPC errors each become a distinct `AGT105` reason instead of one generic
+  message.
+- `ServerConfig` reads a `headers` map for remote servers. Header **values** are
+  never printed; `--dry-run` shows names only, consistent with `env`.
+- `_dedupe` now includes headers in server identity: two remote entries can share
+  a URL and still be different backends.
+- `--dry-run` labels URL servers `(http)` and lists header names; `--probe` and
+  the startup notice now say "probe" rather than "start", because a URL is
+  fetched rather than spawned.
+
+No rule ids were added or changed. 38 rules.
+
+### Changed — removed duplicated helper definitions
+
+`engine.py` defined `_scope_findings` twice, and `cli.py` defined
+`DEFAULT_TIMEOUT`, `_child_env` and `_server_timeout` twice. The copies were
+identical, so behaviour was unaffected, but the second definition silently
+shadowed the first. Each now has one definition.
+
 ## [0.9.0] - 2026-11-09
 
 ### Fixed — scope was being treated as client

@@ -73,8 +73,8 @@ not a style issue, so it is not a warning.
 ### Why `AGT105` is info, not an error
 
 A server that will not start is *unverified*, not *broken*. It might need a
-credential you have not exported yet, or be a remote endpoint that cannot be
-introspected over stdio. Reporting it as an error trains people to ignore errors.
+credential you have not exported yet, or be a remote endpoint that refused the
+HTTP handshake. Reporting it as an error trains people to ignore errors.
 
 The report says how many servers were actually inspected:
 

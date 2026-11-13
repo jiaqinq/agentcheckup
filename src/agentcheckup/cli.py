@@ -11,8 +11,9 @@ from pathlib import Path
 
 from .discovery import ConfigLocation, discover, load_servers, resolve_scopes, take_toml_skips
 from .engine import Report, lint_audit, lint_servers, lint_tools
+from .http import HttpSession
 from .loader import LoadError, StdioSession, load_from_file, servers_from_config
-from .models import ServerConfig, Severity
+from .models import ServerConfig, Severity, Tool
 from .report import __version__, render_json, render_rule_list, render_sarif, render_text
 
 EXIT_OK = 0
@@ -117,15 +118,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "--probe",
         action="store_true",
         help=(
-            "Acknowledge that servers in your config will be started. Today the audit "
-            "starts them either way and only says so; --no-spawn is the way to skip."
+            "Acknowledge that servers in your config will be probed: stdio servers "
+            "are started, remote URLs are fetched. The audit does it either way and "
+            "only says so; --no-spawn is the way to skip."
         ),
     )
     audit.add_argument(
         "--dry-run",
         action="store_true",
         help=(
-            "Print the commands that would be started, then exit. Nothing is "
+            "Print what would be probed (commands and URLs), then exit. Nothing is "
             "executed. Implies --no-spawn."
         ),
     )
@@ -157,32 +159,6 @@ def _emit(report: Report, args: argparse.Namespace) -> None:
         print(render_sarif(report))
     else:
         print(render_text(report, verbose=args.verbose))
-
-
-DEFAULT_TIMEOUT = 25.0
-
-
-def _child_env(server: ServerConfig) -> dict[str, str] | None:
-    """Resolve Codex's ``env_vars`` allowlist against the current environment.
-
-    ``env_vars`` is a list of *names* to inherit; the values live in the parent
-    process. They are read at spawn time, passed to the child, and never stored,
-    logged or rendered — the report only ever shows names.
-    """
-    resolved: dict[str, str] = {}
-    for name in server.env_passthrough:
-        value = os.environ.get(name)
-        if value is not None:
-            resolved[name] = value
-    resolved.update(server.env)  # an explicit env entry wins over passthrough
-    return resolved or None
-
-
-def _server_timeout(args: argparse.Namespace, server: ServerConfig) -> float:
-    """--timeout if given, else the server's own startup_timeout_sec, else 25."""
-    if args.timeout is not None:
-        return args.timeout
-    return server.startup_timeout or DEFAULT_TIMEOUT
 
 
 DEFAULT_TIMEOUT = 25.0
@@ -299,6 +275,9 @@ def _dedupe(servers: list[ServerConfig]) -> list[ServerConfig]:
             tuple(a.lower() for a in server.args),
             (server.url or "").lower(),
             tuple(sorted(server.env.items())),
+            # Two remote entries can share a URL and still be different backends
+            # (different tokens). Compare headers in-process; never render them.
+            tuple(sorted(server.headers.items())),
         )
         if key in seen:
             continue
@@ -378,6 +357,34 @@ def _redact(argv: list[str]) -> str:
     return " ".join(shown)
 
 
+def _introspect(
+    server: ServerConfig, timeout: float
+) -> tuple[list[Tool], str | None, str | None]:
+    """Read one server's tool list.
+
+    A remote (``url``) server is introspected over HTTP; a stdio server is
+    spawned. Returns ``(tools, failure_reason, partial_reason)`` — exactly one of
+    ``tools`` (a list) or ``failure_reason`` is populated, so callers never have
+    to guess which.
+    """
+    if not server.command and not server.url:
+        return [], "server has neither command nor url", None
+    if not server.command:
+        try:
+            with HttpSession(server.url, timeout=timeout, headers=server.headers) as session:
+                tools = session.list_tools()
+        except LoadError as exc:
+            return [], str(exc).splitlines()[0][:200], None
+        return tools, None, session.partial_reason
+    argv = [server.command, *server.args]
+    try:
+        with StdioSession(argv, timeout=timeout, env=_child_env(server)) as session:
+            tools = session.list_tools()
+    except LoadError as exc:
+        return [], str(exc).splitlines()[0][:200], None
+    return tools, None, session.partial_reason
+
+
 def _run_audit(args: argparse.Namespace) -> int:
     configs = [] if args.no_discover else discover()
 
@@ -441,11 +448,15 @@ def _run_audit(args: argparse.Namespace) -> int:
         return EXIT_USAGE
 
     if getattr(args, "dry_run", False):
-        print(f"Would start {len(servers)} server(s) from {len(configs)} config(s):")
+        print(f"Would probe {len(servers)} server(s) from {len(configs)} config(s):")
         print()
         for server in servers:
             if not server.command:
-                print(f"  {server.name:20} (url) {server.url or ''} — not started")
+                headers = ""
+                if server.headers:
+                    # Header *names* only: values are credentials.
+                    headers = "  headers: " + ", ".join(sorted(server.headers))
+                print(f"  {server.name:20} (http) {server.url or ''}{headers}")
                 continue
             print(f"  {server.name:20} {_redact([server.command, *server.args])}")
         print()
@@ -456,9 +467,9 @@ def _run_audit(args: argparse.Namespace) -> int:
 
     if not args.no_spawn and not getattr(args, "dry_run", False) and not args.probe:
         print(
-            f"agentcheckup: starting {len(servers)} server(s) from your config. "
-            "Pass --probe to acknowledge, --dry-run to see the commands, or "
-            "--no-spawn to audit the config only.",
+            f"agentcheckup: probing {len(servers)} server(s) from your config "
+            "(stdio processes and remote URLs). Pass --probe to acknowledge, "
+            "--dry-run to see what runs, or --no-spawn to audit the config only.",
             file=sys.stderr,
         )
 
@@ -472,19 +483,15 @@ def _run_audit(args: argparse.Namespace) -> int:
             failures[server.key] = "not started (--no-spawn)"
     else:
         for server in servers:
-            if not server.command:
-                failures[server.key] = "remote server (url); cannot be introspected over stdio"
+            tools, failure, partial_reason = _introspect(
+                server, _server_timeout(args, server)
+            )
+            if failure is not None:
+                failures[server.key] = failure
                 continue
-            argv = [server.command, *server.args]
-            try:
-                with StdioSession(
-                    argv, timeout=_server_timeout(args, server), env=_child_env(server)
-                ) as session:
-                    tools_by_server[server.key] = session.list_tools()
-                    if session.partial_reason:
-                        partial[server.key] = session.partial_reason
-            except LoadError as exc:
-                failures[server.key] = str(exc).splitlines()[0][:200]
+            tools_by_server[server.key] = tools
+            if partial_reason:
+                partial[server.key] = partial_reason
 
     report = lint_audit(
         servers,

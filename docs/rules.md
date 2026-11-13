@@ -181,8 +181,8 @@ env var instead.
 Tool calls carry your data, often your credentials, over an unencrypted link.
 
 ### AGT105 · info · Server did not return a tool list
-The server failed to start, timed out, or is a remote `url` endpoint that cannot
-be introspected over stdio.
+The server failed to start, timed out, or is a remote `url` endpoint that refused
+the HTTP handshake (authentication, DNS, or timeout).
 
 This is info rather than an error on purpose: one broken server must not
 stop you auditing the other four. But an unreachable server is also an unaudited

@@ -98,11 +98,12 @@ arguably right and the label strict. Reproduce with `python scripts/benchmark.py
 
 ## Does it need network access?
 
-It makes no network calls of its own — no telemetry, no API, no upload. Your
-configuration never leaves the machine.
+No telemetry, no API, no upload — your configuration never leaves the machine.
+The only outbound traffic is the `initialize` / `tools/list` exchange with the
+remote `url` endpoints your own config declares.
 
-It *does* start the servers your config declares, and those processes can do
-whatever they were written to do. That is why these exist:
+It *does* start the stdio servers your config declares, and those processes can
+do whatever they were written to do. That is why these exist:
 
 ```bash
 agentcheckup audit --dry-run   # print the commands, execute nothing
@@ -131,8 +132,8 @@ Names are now split into character bigrams: `读取文件` → `读取`, `取文
 ## Why is my server reported as unverified?
 
 It did not answer `tools/list` within the timeout. Common causes: a missing
-credential in the environment, a remote `url` endpoint that cannot be introspected
-over stdio, or a slow start.
+credential in the environment, a remote `url` endpoint that refused the request
+(401/403, DNS, or timeout), or a slow start.
 
 The report separates this from "clean":
 

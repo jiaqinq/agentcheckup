@@ -20,7 +20,7 @@ agentcheckup
 ```
 
 ```console
-agentcheckup 0.9.0  |  2 server(s)  |  4 tool(s)  |  ~442 tokens per request
+agentcheckup 0.10.0  |  2 server(s)  |  4 tool(s)  |  ~442 tokens per request
 source: 1 config(s)
 coverage: 2/2 server(s) inspected (100%), 0 unverified
 
@@ -44,6 +44,7 @@ user's machine — run `agentcheckup` yourself for your own numbers.
 | **Cross-server conflicts** | The same tool name in two servers (`AGT201`), the same name once normalised (`AGT202`), overlapping descriptions (`AGT203`), the same name in two *different clients* (`AGT204`), and the same server at two *scopes* of one client (`AGT205`). The last two are informational: neither is a collision you can fix by renaming a tool. |
 | **MCP config risks** | Unpinned `npx`/`uvx` packages, plaintext credentials, filesystem servers rooted at a volume root, shell wrapping, permission-bypass flags, prompt injection hidden in tool descriptions. |
 | **Tool-manifest overhead** | A rough token cost for the manifest your agent re-sends on every request. An estimate from the schemas, not a billed figure. |
+| **Remote servers** | `url` servers are introspected over Streamable HTTP (JSON or SSE), not skipped, so their tools take part in conflict detection. |
 | **CI integration** | `--format sarif`, `--fail-on`, `--min-score`, `--baseline`, and a GitHub Action. |
 
 38 rules, zero runtime dependencies, Python 3.10+.
@@ -143,9 +144,10 @@ uvx agentcheckup
 ```
 
 Python 3.10+. **Zero runtime dependencies** — no SDK, no tokenizer, no embeddings.
-It reads JSON, starts processes, prints text, and makes no network calls of its
-own. It does start the servers your config declares; those can do whatever they
-were written to do, which is why `--dry-run` and `--no-spawn` exist.
+It reads JSON, starts stdio servers, and speaks `initialize`/`tools/list` to the
+remote URLs your config declares. No telemetry, no upload, no third-party API.
+It does contact the servers you configured; those can do whatever they were
+written to do, which is why `--dry-run` and `--no-spawn` exist.
 
 ## Usage
 
@@ -226,7 +228,7 @@ Exit codes: `0` clean, `1` findings at or above `--fail-on`, `2` usage/load erro
 
 ## How conflicts are detected
 
-No embeddings, no model, no network — because a linter that needs a 200MB wheel
+No embeddings, no model, no hosted service — because a linter that needs a 200MB wheel
 is a linter that stops running on a plane.
 
 Each tool pair across servers is scored on two signals:
@@ -431,9 +433,10 @@ rule. A report nobody can read is a report nobody acts on.
   `startup_timeout_sec` becomes that server's deadline.
 - **Degrade, don't die.** A server that will not start is one finding, not an
   aborted run.
-- **No network calls of its own.** No telemetry, no API, no upload; your config
-  never leaves the machine. It does *start* the servers you configured, and those
-  can do whatever they were written to do — `--no-spawn` skips that entirely.
+- **No telemetry, no upload.** The only outbound traffic is the `initialize` /
+  `tools/list` exchange with the remote MCP endpoints *your own config declares*;
+  nothing is sent anywhere else. It does *start* the servers you configured, and
+  those can do whatever they were written to do — `--no-spawn` skips that entirely.
 - **Heuristics are labelled as heuristics.** `info` means "a human should
   decide". The score is a conversation starter, not a certification.
 

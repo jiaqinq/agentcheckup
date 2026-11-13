@@ -132,6 +132,10 @@ class ServerConfig:
     #: values are never stored or printed here — only the names, which are not
     #: secrets by themselves.
     env_passthrough: list[str] = field(default_factory=list)
+    #: Extra HTTP headers for a remote (``url``) server, e.g. an ``Authorization``
+    #: bearer token. Names are safe to show; values are treated as secrets and
+    #: are never printed — only echoed back to the server they belong to.
+    headers: dict[str, str] = field(default_factory=dict)
     #: Codex's ``startup_timeout_sec``. Used as this server's deadline when the
     #: caller did not pass an explicit --timeout.
     startup_timeout: float | None = None
@@ -158,6 +162,12 @@ class ServerConfig:
         env_vars = data.get("env_vars") or []
         if not isinstance(env_vars, list):
             env_vars = []
+        raw_headers = data.get("headers") or {}
+        headers = (
+            {str(k): str(v) for k, v in raw_headers.items()}
+            if isinstance(raw_headers, dict)
+            else {}
+        )
         startup = data.get("startup_timeout_sec")
         if not isinstance(startup, (int, float)) or startup <= 0:
             startup = None
@@ -171,6 +181,7 @@ class ServerConfig:
             client=client,
             scope=scope,
             env_passthrough=[str(name) for name in env_vars if str(name).strip()],
+            headers=headers,
             startup_timeout=float(startup) if startup else None,
         )
 
